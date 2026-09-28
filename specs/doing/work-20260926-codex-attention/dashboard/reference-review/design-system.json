@@ -1,0 +1,37 @@
+{
+  "colors": {
+    "background": "14191F",
+    "text": "E3E7ED",
+    "muted": "93A0AD",
+    "cyan": "79CAD3",
+    "warning": "F1C56B",
+    "selection": "253949",
+    "error": "EF9C99"
+  },
+  "font": "macOS system monospaced",
+  "fontSizePt": 13,
+  "cellPitchPx": [
+    10,
+    20
+  ],
+  "scaleVariants": [
+    1,
+    1.5
+  ],
+  "popupPercent": [
+    80,
+    75
+  ],
+  "clientCellSizes": [
+    [
+      120,
+      40
+    ],
+    [
+      80,
+      24
+    ]
+  ],
+  "approval": "proposed, not approved",
+  "scope": "Static terminal artwork; not a Ghostty capture or runtime proof."
+}

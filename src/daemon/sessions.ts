@@ -8,6 +8,10 @@ import type {
   SubagentState,
   BackgroundChild,
   BackgroundInFlight,
+  CodexAttentionMetadata,
+  CodexAttentionSnapshot,
+  CodexPendingItem,
+  CodexRuntimeSessionSnapshot,
 } from "../types/session";
 import { decodeProjectPath, extractProjectInfo } from "./parser";
 import { appendPrompt } from "./status-machine";
@@ -15,6 +19,7 @@ import { getSessionPidMarker } from "./session-markers";
 import { deriveProject } from "./project-derivation";
 import { encodeProjectPath, findSoftEvictTargets } from "./binder/primitives";
 import { worktreeCheckoutRoot } from "../lib/worktree-paths";
+import { importedCodexSessionId } from "./adapters/codex/attention-import";
 
 interface PaneTrackedSessionInput {
   agentType: string;
@@ -119,6 +124,58 @@ export function isPaneTrackedClaudeSession(session: Session): boolean {
 
 export function isBackgroundSession(session: Session): boolean {
   return session.trackingMode === "background";
+}
+
+export function isImportedSession(session: Session): boolean {
+  return session.trackingMode === "imported";
+}
+
+export interface CodexAttentionImportResult {
+  created: number;
+  updated: number;
+  removed: number;
+}
+
+function codexRuntimeSessionStatus(
+  runtimeSession: CodexRuntimeSessionSnapshot,
+): SessionStatus {
+  if (runtimeSession.workState === "not-working") return "idle";
+  return runtimeSession.workState;
+}
+
+function codexRuntimeSessionAttentionType(
+  runtimeSession: CodexRuntimeSessionSnapshot,
+  pendingItems: CodexPendingItem[],
+): AttentionType {
+  if (runtimeSession.workState !== "waiting") return null;
+  const inputItem = pendingItems.find(
+    (pendingItem) => pendingItem.reason === "input-required",
+  );
+  return inputItem?.inputKind === "approval" ? "permission" : "question";
+}
+
+function codexAttentionMetadataEqual(
+  left: CodexAttentionMetadata | undefined,
+  right: CodexAttentionMetadata,
+): boolean {
+  return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
+}
+
+function importedRuntimeSessionFromPendingItem(
+  pendingItem: CodexPendingItem,
+): CodexRuntimeSessionSnapshot {
+  return {
+    sourceId: pendingItem.sourceId,
+    sourceKind: pendingItem.sourceKind,
+    sourceLabel: pendingItem.sourceLabel,
+    ...(pendingItem.workbenchName === undefined
+      ? {}
+      : { workbenchName: pendingItem.workbenchName }),
+    project: pendingItem.project,
+    runtimeDirectory: pendingItem.runtimeDirectory,
+    runtimeSessionId: pendingItem.runtimeSessionId,
+    workState: "not-working",
+  };
 }
 
 /**
@@ -523,6 +580,254 @@ export class SessionManager extends EventEmitter {
     return session;
   }
 
+  importCodexAttentionSnapshot(
+    snapshot: CodexAttentionSnapshot,
+  ): CodexAttentionImportResult {
+    const result: CodexAttentionImportResult = {
+      created: 0,
+      updated: 0,
+      removed: 0,
+    };
+    const runtimeSessionsByImportedId = new Map<
+      string,
+      CodexRuntimeSessionSnapshot
+    >();
+    for (const runtimeSession of snapshot.runtimeSessions) {
+      runtimeSessionsByImportedId.set(
+        importedCodexSessionId(runtimeSession),
+        runtimeSession,
+      );
+    }
+    for (const pendingItem of snapshot.pendingItems) {
+      const importedId = importedCodexSessionId(pendingItem);
+      if (!runtimeSessionsByImportedId.has(importedId)) {
+        runtimeSessionsByImportedId.set(
+          importedId,
+          importedRuntimeSessionFromPendingItem(pendingItem),
+        );
+      }
+    }
+
+    const sourceReportsById = new Map(
+      snapshot.sourceReports.map((sourceReport) => [
+        sourceReport.sourceId,
+        sourceReport,
+      ]),
+    );
+    const pendingItemsBySessionId = new Map<string, CodexPendingItem[]>();
+    for (const pendingItem of snapshot.pendingItems) {
+      const importedId = importedCodexSessionId(pendingItem);
+      const pendingItems = pendingItemsBySessionId.get(importedId) ?? [];
+      pendingItems.push(pendingItem);
+      pendingItemsBySessionId.set(importedId, pendingItems);
+    }
+
+    const retainedImportedSessionIds = new Set<string>();
+    const matchedLocalSessionIds = new Set<string>();
+
+    for (const [importedId, runtimeSession] of runtimeSessionsByImportedId) {
+      const pendingItems = pendingItemsBySessionId.get(importedId) ?? [];
+      const localHostMatches =
+        runtimeSession.sourceKind === "host"
+          ? this.getSessions().filter(
+              (session) =>
+                session.agentType === "codex" &&
+                !isImportedSession(session) &&
+                session.nativeSessionId === runtimeSession.runtimeSessionId,
+            )
+          : [];
+      const localHostSession =
+        localHostMatches.length === 1 ? localHostMatches[0] : undefined;
+      const targetId = localHostSession?.id ?? importedId;
+      const metadata: CodexAttentionMetadata = {
+        identity: {
+          sourceId: runtimeSession.sourceId,
+          runtimeSessionId: runtimeSession.runtimeSessionId,
+        },
+        source: {
+          sourceId: runtimeSession.sourceId,
+          sourceKind: runtimeSession.sourceKind,
+          sourceLabel: runtimeSession.sourceLabel,
+          ...(runtimeSession.workbenchName === undefined
+            ? {}
+            : { workbenchName: runtimeSession.workbenchName }),
+        },
+        project: runtimeSession.project,
+        ...(runtimeSession.runtimeSessionName === undefined
+          ? {}
+          : { runtimeSessionName: runtimeSession.runtimeSessionName }),
+        ...(runtimeSession.model === undefined
+          ? {}
+          : { model: runtimeSession.model }),
+        workState: runtimeSession.workState,
+        ...(runtimeSession.nativeUpdatedAt === undefined
+          ? {}
+          : { nativeUpdatedAt: runtimeSession.nativeUpdatedAt }),
+        ...(runtimeSession.latestTokenUsage === undefined
+          ? {}
+          : { latestTokenUsage: runtimeSession.latestTokenUsage }),
+        ...(runtimeSession.cumulativeTokenUsage === undefined
+          ? {}
+          : { cumulativeTokenUsage: runtimeSession.cumulativeTokenUsage }),
+        ...(runtimeSession.modelContextWindow === undefined
+          ? {}
+          : { modelContextWindow: runtimeSession.modelContextWindow }),
+        coverage: sourceReportsById.get(runtimeSession.sourceId) ?? null,
+        pendingItems,
+        localActionEligibility: localHostSession ? "eligible" : "ineligible",
+      };
+
+      if (localHostSession) {
+        matchedLocalSessionIds.add(localHostSession.id);
+        const stored = this.sessions.get(localHostSession.id);
+        if (
+          stored &&
+          !codexAttentionMetadataEqual(stored.codexAttention, metadata)
+        ) {
+          stored.codexAttention = metadata;
+          stored.updatedAt = new Date();
+          this.emit("change", {
+            type: "updated",
+            session: stored,
+          } as SessionEvent);
+          result.updated += 1;
+        }
+        continue;
+      }
+
+      if (runtimeSession.sourceKind === "host") {
+        continue;
+      }
+
+      retainedImportedSessionIds.add(targetId);
+      const existing = this.sessions.get(targetId);
+      if (!existing) {
+        const status = codexRuntimeSessionStatus(runtimeSession);
+        const session: Session = {
+          id: targetId,
+          agentType: "codex",
+          trackingMode: "imported",
+          nativeSessionId: runtimeSession.runtimeSessionId,
+          project: runtimeSession.project.name,
+          cwd: runtimeSession.runtimeDirectory,
+          logPath: null,
+          status,
+          attentionType: codexRuntimeSessionAttentionType(
+            runtimeSession,
+            pendingItems,
+          ),
+          pendingTool: null,
+          inPlanMode: false,
+          tmuxPane: null,
+          updatedAt: new Date(),
+          lastActivityAt:
+            runtimeSession.nativeUpdatedAt === undefined
+              ? null
+              : new Date(runtimeSession.nativeUpdatedAt * 1000).toISOString(),
+          lastUserInputAt: null,
+          subagents: [],
+          gitBranch: null,
+          version:
+            metadata.coverage?.providerVersion ??
+            metadata.coverage?.lastSuccessfulProviderVersion ??
+            null,
+          pid: null,
+          statusChangedAt: null,
+          attentionGeneration: 0,
+          previousStatus: null,
+          attentionState: pendingItems.length > 0 ? "unread" : null,
+          lastSeenAt: null,
+          lastPrompt: null,
+          prompts: [],
+          codexAttention: metadata,
+        };
+        this.sessions.set(targetId, session);
+        this.emit("change", { type: "created", session } as SessionEvent);
+        result.created += 1;
+        continue;
+      }
+
+      const nextStatus = codexRuntimeSessionStatus(runtimeSession);
+      const nextAttentionType = codexRuntimeSessionAttentionType(
+        runtimeSession,
+        pendingItems,
+      );
+      const previousEventIds = new Set(
+        existing.codexAttention?.pendingItems.map((item) => item.eventId) ?? [],
+      );
+      const hasNewPendingItem = pendingItems.some(
+        (item) => !previousEventIds.has(item.eventId),
+      );
+      const nextAttentionState =
+        pendingItems.length === 0
+          ? null
+          : hasNewPendingItem || existing.attentionState === null
+            ? "unread"
+            : existing.attentionState;
+      const nextLastActivityAt =
+        runtimeSession.nativeUpdatedAt === undefined
+          ? null
+          : new Date(runtimeSession.nativeUpdatedAt * 1000).toISOString();
+      const nextVersion =
+        metadata.coverage?.providerVersion ??
+        metadata.coverage?.lastSuccessfulProviderVersion ??
+        null;
+      const changed =
+        existing.project !== runtimeSession.project.name ||
+        existing.cwd !== runtimeSession.runtimeDirectory ||
+        existing.status !== nextStatus ||
+        existing.attentionType !== nextAttentionType ||
+        existing.lastActivityAt !== nextLastActivityAt ||
+        existing.version !== nextVersion ||
+        existing.attentionState !== nextAttentionState ||
+        !codexAttentionMetadataEqual(existing.codexAttention, metadata);
+      if (!changed) continue;
+
+      if (existing.status !== nextStatus) {
+        existing.previousStatus = existing.status;
+        existing.statusChangedAt = new Date().toISOString();
+      }
+      if (existing.attentionType !== nextAttentionType) {
+        existing.attentionGeneration += 1;
+      }
+      existing.project = runtimeSession.project.name;
+      existing.cwd = runtimeSession.runtimeDirectory;
+      existing.status = nextStatus;
+      existing.attentionType = nextAttentionType;
+      existing.lastActivityAt = nextLastActivityAt;
+      existing.version = nextVersion;
+      existing.attentionState = nextAttentionState;
+      existing.codexAttention = metadata;
+      existing.updatedAt = new Date();
+      this.emit("change", {
+        type: "updated",
+        session: existing,
+      } as SessionEvent);
+      result.updated += 1;
+    }
+
+    for (const session of [...this.sessions.values()]) {
+      if (isImportedSession(session)) {
+        if (!retainedImportedSessionIds.has(session.id)) {
+          this.removeSession(session.id);
+          result.removed += 1;
+        }
+        continue;
+      }
+      if (
+        session.codexAttention !== undefined &&
+        !matchedLocalSessionIds.has(session.id)
+      ) {
+        delete session.codexAttention;
+        session.updatedAt = new Date();
+        this.emit("change", { type: "updated", session } as SessionEvent);
+        result.updated += 1;
+      }
+    }
+
+    return result;
+  }
+
   /**
    * Update a session with new state
    */
@@ -531,6 +836,8 @@ export class SessionManager extends EventEmitter {
     if (!session) return false;
 
     let changed = false;
+    const wasAcknowledgedWaiting =
+      session.status === "waiting" && session.attentionState === "read";
 
     const statusChanged =
       state.status !== undefined && state.status !== session.status;
@@ -567,6 +874,17 @@ export class SessionManager extends EventEmitter {
     // A single +1 covers both fields changing in one call.
     if (attentionChanged || pendingToolChanged) {
       session.attentionGeneration += 1;
+      changed = true;
+    }
+
+    // Acknowledging a waiting request suppresses only that request. Leaving
+    // the wait, or replacing it in-place with a different request, makes the
+    // next attention generation visible again.
+    if (
+      wasAcknowledgedWaiting &&
+      (statusChanged || attentionChanged || pendingToolChanged)
+    ) {
+      session.attentionState = null;
       changed = true;
     }
 
@@ -884,7 +1202,11 @@ export class SessionManager extends EventEmitter {
       return "noop";
     }
     for (const other of this.sessions.values()) {
-      if (other.id !== sessionId && other.nativeSessionId === nativeSessionId) {
+      if (
+        other.id !== sessionId &&
+        !isImportedSession(other) &&
+        other.nativeSessionId === nativeSessionId
+      ) {
         const reclaimable =
           options.reclaim === true &&
           isPaneTrackedSession(other) &&
@@ -1013,7 +1335,9 @@ export class SessionManager extends EventEmitter {
     nativeSessionId: string,
   ): Readonly<Session> | undefined {
     const matches = this.getSessions().filter(
-      (session) => session.nativeSessionId === nativeSessionId,
+      (session) =>
+        !isImportedSession(session) &&
+        session.nativeSessionId === nativeSessionId,
     );
     return matches.length === 1 ? matches[0] : undefined;
   }

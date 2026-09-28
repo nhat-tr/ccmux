@@ -33,6 +33,7 @@ export function createPickerCommand(): Command {
     .option("--icons <style>", "Icon style: none, emoji, nerdfont, dot")
     .option("--persistent", "Keep picker open after switching sessions")
     .option("--no-persistent", "Close picker after switching sessions")
+    .option("--attention", "Show the cached agent-attention dashboard")
     .option(
       "--client-tty <tty>",
       "tmux client tty to act on (passed by the --client-tty popup binding, see README)",
@@ -43,6 +44,7 @@ export function createPickerCommand(): Command {
         icons?: string;
         persistent?: boolean;
         clientTty?: string;
+        attention?: boolean;
       }) => {
         markStartup("cli_parse");
 
@@ -114,6 +116,7 @@ export function createPickerCommand(): Command {
           reviewHandback: prefs.reviewHandback,
           forkableAgents: forkableAgentNames(prefs),
           theme: prefs.theme,
+          attention: options.attention,
         });
       },
     );

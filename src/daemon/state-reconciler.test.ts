@@ -2916,6 +2916,23 @@ describe("reconcileAll", () => {
       expect(session.attentionState).toBeNull();
     });
 
+    it("should retain read while the acknowledged request is still waiting", async () => {
+      const id = makeSession(sessionManager, {
+        status: "waiting",
+        attentionType: "question",
+        tmuxPane: "%1",
+        pid: 12345,
+      });
+      sessionManager.setAttentionState(id, "read");
+
+      await reconcileAll(
+        makeDeps(sessionManager, makeAttentionDeps(null)),
+        makeSnapshot({ processes: [fakeProcess()], panes: [fakePane()] }),
+      );
+
+      expect(sessionManager.getSession(id)?.attentionState).toBe("read");
+    });
+
     it("should reset processedTransitions when new work starts with null attention", async () => {
       const id = makeSession(sessionManager, {
         status: "working",

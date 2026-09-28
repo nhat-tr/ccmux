@@ -70,6 +70,24 @@ describe("picker command --persistent/--no-persistent flag parsing", () => {
   });
 });
 
+describe("picker command --attention flag parsing", () => {
+  it("is available on the explicit and default picker command", async () => {
+    const program = createProgram();
+    program.exitOverride();
+    const picker = program.commands.find(
+      (command) => command.name() === "picker",
+    );
+    expect(picker).toBeDefined();
+    let seen = false;
+    picker!.action((options: { attention?: boolean }) => {
+      seen = options.attention === true;
+    });
+
+    await program.parseAsync(["--attention"], { from: "user" });
+    expect(seen).toBe(true);
+  });
+});
+
 describe("--client-tty on the bare `ccmux` command", () => {
   // The tmux binding runs `ccmux --client-tty #{client_tty}` with no
   // subcommand, so the flag has to survive commander's default-command

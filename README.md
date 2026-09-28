@@ -117,6 +117,14 @@ The zsh `eval` has to come after `compinit`, since the script registers itself w
 > ```
 >
 > The `run-shell -C` wrapper is what makes `#{client_tty}` expand, since `display-popup` never expands its own command. The `-e "CCMUX_CLIENT_TTY=#{client_tty}"` form documented previously still works, on tmux 3.3+.
+>
+> The cached attention dashboard has a dedicated fast launcher. Prefix + g opens
+> it at the reviewed size and pins every action to the client that pressed the
+> shortcut:
+>
+> ```tmux
+> bind-key g run-shell -C 'display-popup -E -w 80% -h 75% "ccmux-attention --client-tty #{client_tty}"'
+> ```
 
 ## 🎮 Usage
 
@@ -127,6 +135,7 @@ The zsh `eval` has to come after `compinit`, since the script registers itself w
 | `ccmux`                                     | Launch interactive TUI picker (default)                                                                                          |
 | `ccmux picker`                              | Launch TUI with options (`--preview`, `--icons <style>`)                                                                         |
 | `ccmux picker --persistent`                 | Dashboard mode (stay open after switching sessions)                                                                              |
+| `ccmux-attention`                           | Open the cached attention dashboard through the dedicated popup launcher                                                         |
 | `ccmux spawn [agent]`                       | Spawn a new agent session in a tmux pane                                                                                         |
 | `ccmux invoke [agent] "prompt"`             | Run a single agent turn and write the response to stdout ([docs](docs/invoke.md))                                                |
 | `ccmux invoke list`                         | List active and recently-finished invocations (`-j` for JSON)                                                                    |

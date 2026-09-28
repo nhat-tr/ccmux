@@ -253,6 +253,8 @@ export type LineMeaning =
       text: string;
       timestamp?: string;
       authoritative?: true;
+      /** The provider emitted the same message through parallel schemas. */
+      deduplicate?: true;
     }
   | { kind: "user"; text: string; timestamp?: string }
   | { kind: "skip" };
@@ -392,10 +394,14 @@ export async function foldJsonlTurns(
         pendingTimestamp = meaning.timestamp ?? pendingTimestamp;
       } else {
         if (!pendingFull) {
-          pending.unshift(meaning.text);
-          pendingChars += pendingChars
-            ? meaning.text.length + 2
-            : meaning.text.length;
+          const isDuplicate =
+            meaning.deduplicate && pending.includes(meaning.text);
+          if (!isDuplicate) {
+            pending.unshift(meaning.text);
+            pendingChars += pendingChars
+              ? meaning.text.length + 2
+              : meaning.text.length;
+          }
           // Once the turn provably holds more than the cap will keep, stop
           // STORING further fragments (the walk goes on, for boundaries).
           // Output-identical rather than merely close: the walk collects
@@ -404,6 +410,7 @@ export async function foldJsonlTurns(
           // running count is only a trigger for the exact test, because a
           // fragment run that trims back under the cap must keep growing.
           if (
+            !isDuplicate &&
             pendingChars > MAX_TURN_CHARS &&
             joinPending(pending).length > MAX_TURN_CHARS
           ) {

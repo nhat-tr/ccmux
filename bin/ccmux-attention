@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+export CCMUX_CALLER_PWD="$PWD"
+cd "$(cd -P "$(dirname "$SOURCE")" && pwd)/.."
+
+ATTENTION_PREPAINT="${CCMUX_HOME:-$HOME/.config/ccmux}/attention-prepaint.txt"
+if [ -t 1 ] && [ -s "$ATTENTION_PREPAINT" ]; then
+  printf '\033[?1049h\033[2J\033[H'
+  command cat "$ATTENTION_PREPAINT"
+fi
+
+if [ -f dist/attention-index.js ] && [ -z "$(find src package.json bun.lock bunfig.toml build.ts -newer dist/attention-index.js -print -quit 2>/dev/null)" ]; then
+  exec bun dist/attention-index.js "$@"
+fi
+
+exec bun src/attention-index.ts "$@"

@@ -15,7 +15,11 @@ import {
   COLUMN_FIELDS,
   DEFAULT_BREAKPOINTS,
 } from "../../lib/preferences";
-import type { EnrichedSession, BranchPR } from "../../types";
+import type {
+  EnrichedSession,
+  BranchPR,
+  CodexSourceCoverage,
+} from "../../types";
 import { displayWidth, sliceToWidth, truncateText } from "../utils/format";
 import { stripTerminalNoise } from "../../lib/strip-ansi";
 import { HANDOFF_PREFIX } from "../../daemon/handoff";
@@ -24,6 +28,192 @@ const RESPONSIVE_KEYS = new Set([
   "default",
   ...BREAKPOINT_NAMES,
 ] as readonly string[]);
+
+const codexContextBaselineTokens = 12_000;
+
+/** Compact age used by the attention board, rounded down to its largest unit. */
+export function formatAttentionAge(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const totalHours = Math.floor(totalMinutes / 60);
+  return `${totalHours}h`;
+}
+
+export function attentionSourceLabel(session: EnrichedSession): string {
+  const source = session.codexAttention?.source;
+  if (!source) return "Mac";
+  if (source.sourceKind === "host") return "Mac";
+  return source.sourceLabel;
+}
+
+export function attentionRuntimeSessionLabel(session: EnrichedSession): string {
+  const runtimeSessionName = session.codexAttention?.runtimeSessionName;
+  if (runtimeSessionName) return runtimeSessionName;
+  if (session.summary) return session.summary;
+  const runtimeSessionId =
+    session.codexAttention?.identity.runtimeSessionId ??
+    session.nativeSessionId;
+  return runtimeSessionId ? `ID …${runtimeSessionId.slice(-8)}` : "Unavailable";
+}
+
+export function attentionContextRemainingPercent(
+  session: EnrichedSession,
+): number | null {
+  const latestTokenUsage = session.codexAttention?.latestTokenUsage;
+  const modelContextWindow = session.codexAttention?.modelContextWindow;
+  if (!latestTokenUsage || modelContextWindow === undefined) return null;
+  if (modelContextWindow <= codexContextBaselineTokens) return 0;
+  const effectiveWindow = modelContextWindow - codexContextBaselineTokens;
+  const usedTokens = Math.max(
+    0,
+    latestTokenUsage.totalTokens - codexContextBaselineTokens,
+  );
+  const remainingTokens = Math.max(0, effectiveWindow - usedTokens);
+  return Math.round(
+    Math.min(1, Math.max(0, remainingTokens / effectiveWindow)) * 100,
+  );
+}
+
+export function attentionContextRemainingLabel(
+  session: EnrichedSession,
+): string {
+  const remainingPercent = attentionContextRemainingPercent(session);
+  return remainingPercent === null ? "—" : `${remainingPercent}% left`;
+}
+
+export function attentionIdleLabel(
+  session: EnrichedSession,
+  nowMilliseconds: number,
+): string {
+  if (attentionWorkStateLabel(session) === "Working") return "—";
+  const nativeUpdatedAt = session.codexAttention?.nativeUpdatedAt;
+  const lastActivityAt =
+    session.lastActivityAt ??
+    (nativeUpdatedAt === undefined
+      ? null
+      : new Date(nativeUpdatedAt * 1000).toISOString());
+  if (!lastActivityAt) return "—";
+  return formatAttentionAge(nowMilliseconds - Date.parse(lastActivityAt));
+}
+
+export function formatAttentionTokenCount(tokens: number): string {
+  if (tokens < 1_000) return String(tokens);
+  const divisor = tokens < 1_000_000 ? 1_000 : 1_000_000;
+  const suffix = divisor === 1_000 ? "k" : "m";
+  const value = tokens / divisor;
+  const formatted =
+    value >= 100
+      ? Math.round(value).toString()
+      : value.toFixed(1).replace(/\.0$/u, "");
+  return `${formatted}${suffix}`;
+}
+
+export function attentionContextUsageLabel(session: EnrichedSession): string {
+  const attention = session.codexAttention;
+  if (
+    !attention?.latestTokenUsage ||
+    attention.modelContextWindow === undefined
+  ) {
+    return "unavailable";
+  }
+  return `${attentionContextRemainingLabel(session)} · ${formatAttentionTokenCount(attention.latestTokenUsage.totalTokens)} / ${formatAttentionTokenCount(attention.modelContextWindow)}`;
+}
+
+export function attentionCumulativeUsageLabel(
+  session: EnrichedSession,
+): string {
+  const usage = session.codexAttention?.cumulativeTokenUsage;
+  if (!usage) return "unavailable";
+  return `${formatAttentionTokenCount(usage.totalTokens)} total · ${formatAttentionTokenCount(usage.cachedInputTokens)} cached input`;
+}
+
+export function attentionWorkStateLabel(session: EnrichedSession): string {
+  const workState = session.codexAttention?.workState;
+  if (workState === "working" || session.status === "working") return "Working";
+  if (workState === "waiting" || session.status === "waiting") return "Waiting";
+  if (workState === "not-working") return "Idle";
+  return "Idle";
+}
+
+export function attentionNextActionLabel(session: EnrichedSession): string {
+  const pendingItems = session.codexAttention?.pendingItems ?? [];
+  if (pendingItems.length > 0) {
+    const inputItems = pendingItems.filter(
+      (item) => item.reason === "input-required",
+    );
+    if (inputItems.length > 0) {
+      const kinds = new Set(inputItems.map((item) => item.inputKind));
+      if (kinds.has("user-input") && kinds.has("approval")) {
+        return `Answer / approve (${inputItems.length})`;
+      }
+      if (kinds.has("approval")) {
+        return inputItems.length === 1
+          ? "Review approval"
+          : `Review approvals (${inputItems.length})`;
+      }
+      return inputItems.length === 1
+        ? "Answer needed"
+        : `Answer requests (${inputItems.length})`;
+    }
+
+    const errorCount = pendingItems.filter(
+      (item) => item.reason === "error",
+    ).length;
+    if (errorCount > 0) {
+      return errorCount === 1
+        ? "Inspect error"
+        : `Inspect errors (${errorCount})`;
+    }
+    const replyCount = pendingItems.filter(
+      (item) => item.reason === "reply-ready",
+    ).length;
+    return replyCount === 1 ? "Read reply" : `Read replies (${replyCount})`;
+  }
+
+  if (session.codexAttention) return "—";
+  if (session.attentionState === "read") return "—";
+  if (session.status === "waiting") {
+    if (
+      session.attentionType === "permission" ||
+      session.attentionType === "plan_approval"
+    ) {
+      return "Review approval";
+    }
+    if (session.attentionType === "question") return "Answer needed";
+    return "Check request";
+  }
+  if (session.attentionState === "unread") return "Read reply";
+  return "—";
+}
+
+export function attentionWaitLabel(session: EnrichedSession): string {
+  const longestWait = (session.codexAttention?.pendingItems ?? []).reduce(
+    (longest, item) => Math.max(longest, item.waitingMilliseconds),
+    0,
+  );
+  return longestWait > 0 ? formatAttentionAge(longestWait) : "–";
+}
+
+export function sourceCoverageLabel(
+  coverage: CodexSourceCoverage | null,
+  nowMilliseconds: number,
+  sourceLabel?: string,
+): string {
+  const label =
+    sourceLabel ??
+    (coverage?.sourceKind === "workbench" ? coverage.sourceId : "Mac");
+  if (!coverage) return `${label}: Not checked yet`;
+  const ageFrom =
+    coverage.coverage === "unavailable"
+      ? (coverage.lastSuccessfulAt ?? coverage.observedAt)
+      : coverage.observedAt;
+  const age = formatAttentionAge(nowMilliseconds - Date.parse(ageFrom));
+  return coverage.coverage === "available"
+    ? `${label}: updated ${age} ago`
+    : `${label}: unavailable; last updated ${age} ago`;
+}
 
 /** Per-field default mode applied when an entry omits one. */
 const DEFAULT_MODES: Partial<Record<ColumnField, string>> = {

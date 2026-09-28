@@ -1,0 +1,1282 @@
+[
+  {
+    "name": "ccmux-attention-wide-960x600",
+    "columns": 96,
+    "rows": 30,
+    "cellWidthPx": 10,
+    "cellHeightPx": 20,
+    "fontSizePt": 13,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 180,
+        "width": 960,
+        "height": 20,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 29,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Source coverage",
+        "color": "93A0AD",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Mac: checked 3s     Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  PROJECT            AGENT  LOCATION                WORK STATE        PENDING            WAIT",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "> architectural-r... Codex  Mac                     Waiting input     2 Input / approval 12m",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "  api-workers        Codex  Workbench WB-payments   Error stop (last) 1 Error            4m",
+        "color": "EF9C99",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "  question-report    Codex  Mac                     Reply ready       1 Reply            2m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "  toolkit            Claude Mac                     Working           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 17,
+        "text": "  sandbox-run        Codex  Workbench WB-sandbox    Unknown           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 20,
+        "text": "--------------------------------------------------------------------------------------------",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 21,
+        "text": "Selected: architectural-reference-documentation / Codex / Mac",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 22,
+        "text": "Pending items: input selection (12m); approval requested (11m)",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 23,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000001",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 24,
+        "text": "Viewing and navigation preserve both pending items.",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 25,
+        "text": "Enter verifies the existing pane before selecting it.",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 27,
+        "text": "j/k Select   / Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 28,
+        "text": "Enter Go to conversation   Esc Close",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  },
+  {
+    "name": "ccmux-attention-wide-1440x900",
+    "columns": 96,
+    "rows": 30,
+    "cellWidthPx": 15,
+    "cellHeightPx": 30,
+    "fontSizePt": 19.5,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 270,
+        "width": 1440,
+        "height": 30,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 29,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Source coverage",
+        "color": "93A0AD",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Mac: checked 3s     Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  PROJECT            AGENT  LOCATION                WORK STATE        PENDING            WAIT",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "> architectural-r... Codex  Mac                     Waiting input     2 Input / approval 12m",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "  api-workers        Codex  Workbench WB-payments   Error stop (last) 1 Error            4m",
+        "color": "EF9C99",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "  question-report    Codex  Mac                     Reply ready       1 Reply            2m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "  toolkit            Claude Mac                     Working           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 17,
+        "text": "  sandbox-run        Codex  Workbench WB-sandbox    Unknown           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 20,
+        "text": "--------------------------------------------------------------------------------------------",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 21,
+        "text": "Selected: architectural-reference-documentation / Codex / Mac",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 22,
+        "text": "Pending items: input selection (12m); approval requested (11m)",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 23,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000001",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 24,
+        "text": "Viewing and navigation preserve both pending items.",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 25,
+        "text": "Enter verifies the existing pane before selecting it.",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 27,
+        "text": "j/k Select   / Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 28,
+        "text": "Enter Go to conversation   Esc Close",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  },
+  {
+    "name": "ccmux-attention-wide-recovery-960x600",
+    "columns": 96,
+    "rows": 30,
+    "cellWidthPx": 10,
+    "cellHeightPx": 20,
+    "fontSizePt": 13,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 220,
+        "width": 960,
+        "height": 20,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 29,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Source coverage",
+        "color": "93A0AD",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Mac: checked 3s     Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  PROJECT            AGENT  LOCATION                WORK STATE        PENDING            WAIT",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "  architectural-r... Codex  Mac                     Waiting input     2 Input / approval 12m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "> api-workers        Codex  Workbench WB-payments   Error stop (last) 1 Error            4m",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "  question-report    Codex  Mac                     Reply ready       1 Reply            2m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "  toolkit            Claude Mac                     Working           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 17,
+        "text": "  sandbox-run        Codex  Workbench WB-sandbox    Unknown           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 20,
+        "text": "--------------------------------------------------------------------------------------------",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 21,
+        "text": "Pane verification failed - selection and pending record retained",
+        "color": "F1C56B",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 22,
+        "text": "Source: Workbench WB-payments (unavailable 2m)   Directory: /workspace/api-workers",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 23,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000002",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 24,
+        "text": "Host: workbench attach WB-payments",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 25,
+        "text": "Inside: cd /workspace/api-workers; codex resume 0195a100-0000-7000-8000-000000000002",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 27,
+        "text": "j/k Select   / Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 28,
+        "text": "j/k Select another row   Esc Close (no automatic resume)",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  },
+  {
+    "name": "ccmux-attention-wide-recovery-1440x900",
+    "columns": 96,
+    "rows": 30,
+    "cellWidthPx": 15,
+    "cellHeightPx": 30,
+    "fontSizePt": 19.5,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 330,
+        "width": 1440,
+        "height": 30,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 29,
+        "text": "+----------------------------------------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Source coverage",
+        "color": "93A0AD",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Mac: checked 3s     Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  PROJECT            AGENT  LOCATION                WORK STATE        PENDING            WAIT",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "  architectural-r... Codex  Mac                     Waiting input     2 Input / approval 12m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "> api-workers        Codex  Workbench WB-payments   Error stop (last) 1 Error            4m",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "  question-report    Codex  Mac                     Reply ready       1 Reply            2m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "  toolkit            Claude Mac                     Working           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 17,
+        "text": "  sandbox-run        Codex  Workbench WB-sandbox    Unknown           0 -                -",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 20,
+        "text": "--------------------------------------------------------------------------------------------",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 21,
+        "text": "Pane verification failed - selection and pending record retained",
+        "color": "F1C56B",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 22,
+        "text": "Source: Workbench WB-payments (unavailable 2m)   Directory: /workspace/api-workers",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 23,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000002",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 24,
+        "text": "Host: workbench attach WB-payments",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 25,
+        "text": "Inside: cd /workspace/api-workers; codex resume 0195a100-0000-7000-8000-000000000002",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 27,
+        "text": "j/k Select   / Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 28,
+        "text": "j/k Select another row   Esc Close (no automatic resume)",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  },
+  {
+    "name": "ccmux-attention-compact-640x360",
+    "columns": 64,
+    "rows": 18,
+    "cellWidthPx": 10,
+    "cellHeightPx": 20,
+    "fontSizePt": 13,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 120,
+        "width": 640,
+        "height": 20,
+        "color": "253949"
+      },
+      {
+        "x": 0,
+        "y": 140,
+        "width": 640,
+        "height": 20,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 17,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 3,
+        "text": "Mac: checked 3s | Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Project / agent / source       State      Items / wait",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "> architectural-ref... / Codex / Mac",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  Waiting input     Input / approval: 2 items, 12m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 8,
+        "text": "  api-workers / Codex / Workbench WB-payments",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "  Error stop (last)   Error: 1 item, 4m",
+        "color": "EF9C99",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 10,
+        "text": "  question-report / Codex / Mac   Reply ready: 1 item, 2m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "Rows 1-3 of 5    j/k scroll; selected details below",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 12,
+        "text": "architectural-reference-documentation",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "Input selection (12m); approval requested (11m)",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 14,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000001",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "/ Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 16,
+        "text": "j/k Select   Enter Go to conversation   Esc Close",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  },
+  {
+    "name": "ccmux-attention-compact-960x540",
+    "columns": 64,
+    "rows": 18,
+    "cellWidthPx": 15,
+    "cellHeightPx": 30,
+    "fontSizePt": 19.5,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 180,
+        "width": 960,
+        "height": 30,
+        "color": "253949"
+      },
+      {
+        "x": 0,
+        "y": 210,
+        "width": 960,
+        "height": 30,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 17,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 3,
+        "text": "Mac: checked 3s | Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Project / agent / source       State      Items / wait",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "> architectural-ref... / Codex / Mac",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  Waiting input     Input / approval: 2 items, 12m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 8,
+        "text": "  api-workers / Codex / Workbench WB-payments",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "  Error stop (last)   Error: 1 item, 4m",
+        "color": "EF9C99",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 10,
+        "text": "  question-report / Codex / Mac   Reply ready: 1 item, 2m",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "Rows 1-3 of 5    j/k scroll; selected details below",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 12,
+        "text": "architectural-reference-documentation",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "Input selection (12m); approval requested (11m)",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 14,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000001",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "/ Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 16,
+        "text": "j/k Select   Enter Go to conversation   Esc Close",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  },
+  {
+    "name": "ccmux-attention-compact-recovery-640x360",
+    "columns": 64,
+    "rows": 18,
+    "cellWidthPx": 10,
+    "cellHeightPx": 20,
+    "fontSizePt": 13,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 120,
+        "width": 640,
+        "height": 20,
+        "color": "253949"
+      },
+      {
+        "x": 0,
+        "y": 140,
+        "width": 640,
+        "height": 20,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 17,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 3,
+        "text": "Mac: checked 3s | Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Project / agent / source       State      Items / wait",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "> api-workers / Codex / Workbench WB-payments",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  Error stop (last)      Error: 1 item, waiting 4m",
+        "color": "EF9C99",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 8,
+        "text": "Pane verification failed. Selection and item retained.",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "Source: Workbench WB-payments (unavailable 2m)",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 10,
+        "text": "Directory: /workspace/api-workers",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000002",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 12,
+        "text": "Host: workbench attach WB-payments",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "Inside: cd /workspace/api-workers",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 14,
+        "text": "codex resume 0195a100-0000-7000-8000-000000000002",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "/ Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 16,
+        "text": "j/k Select   Esc Close (no resume performed)",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  },
+  {
+    "name": "ccmux-attention-compact-recovery-960x540",
+    "columns": 64,
+    "rows": 18,
+    "cellWidthPx": 15,
+    "cellHeightPx": 30,
+    "fontSizePt": 19.5,
+    "background": "14191F",
+    "rectangles": [
+      {
+        "x": 0,
+        "y": 180,
+        "width": 960,
+        "height": 30,
+        "color": "253949"
+      },
+      {
+        "x": 0,
+        "y": 210,
+        "width": 960,
+        "height": 30,
+        "color": "253949"
+      }
+    ],
+    "lines": [
+      {
+        "column": 0,
+        "row": 0,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 0,
+        "row": 17,
+        "text": "+--------------------------------------------------------------+",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 1,
+        "text": "Agent attention     4 pending items / 3 rows",
+        "color": "79CAD3",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 2,
+        "text": "All tracked (5)     / Search     f Pending / All",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 3,
+        "text": "Mac: checked 3s | Workbench WB-payments: unavailable 2m",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 4,
+        "text": "Workbench WB-sandbox: Not yet checked",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 5,
+        "text": "Project / agent / source       State      Items / wait",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 6,
+        "text": "> api-workers / Codex / Workbench WB-payments",
+        "color": "E3E7ED",
+        "isBold": true
+      },
+      {
+        "column": 2,
+        "row": 7,
+        "text": "  Error stop (last)      Error: 1 item, waiting 4m",
+        "color": "EF9C99",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 8,
+        "text": "Pane verification failed. Selection and item retained.",
+        "color": "F1C56B",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 9,
+        "text": "Source: Workbench WB-payments (unavailable 2m)",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 10,
+        "text": "Directory: /workspace/api-workers",
+        "color": "E3E7ED",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 11,
+        "text": "Native Runtime Session: 0195a100-0000-7000-8000-000000000002",
+        "color": "93A0AD",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 12,
+        "text": "Host: workbench attach WB-payments",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 13,
+        "text": "Inside: cd /workspace/api-workers",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 14,
+        "text": "codex resume 0195a100-0000-7000-8000-000000000002",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 15,
+        "text": "/ Search   f Pending / All   c Clear selected row",
+        "color": "79CAD3",
+        "isBold": false
+      },
+      {
+        "column": 2,
+        "row": 16,
+        "text": "j/k Select   Esc Close (no resume performed)",
+        "color": "79CAD3",
+        "isBold": false
+      }
+    ]
+  }
+]

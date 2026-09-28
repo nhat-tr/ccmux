@@ -1,0 +1,706 @@
+[
+  {
+    "screen": "ccmux-attention-wide",
+    "file": "screens/ccmux-attention-wide-960x600.png",
+    "size": "960x600",
+    "clientCells": [
+      120,
+      40
+    ],
+    "popupCells": [
+      96,
+      30
+    ],
+    "textScalePercent": 100,
+    "masks": [
+      {
+        "x": 40,
+        "y": 180,
+        "width": 180,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 910,
+        "y": 180,
+        "width": 30,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 220,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 910,
+        "y": 220,
+        "width": 20,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 260,
+        "width": 150,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 910,
+        "y": 260,
+        "width": 20,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 300,
+        "width": 70,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 40,
+        "y": 340,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 120,
+        "y": 420,
+        "width": 370,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 340,
+        "y": 440,
+        "width": 30,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 600,
+        "y": 440,
+        "width": 30,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 260,
+        "y": 460,
+        "width": 360,
+        "height": 20,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "470167b8835cc70b8c9771c4468c231c0f9e5fbb1ff2589f272892d0547c2c48"
+  },
+  {
+    "screen": "ccmux-attention-wide",
+    "file": "screens/ccmux-attention-wide-1440x900.png",
+    "size": "1440x900",
+    "clientCells": [
+      120,
+      40
+    ],
+    "popupCells": [
+      96,
+      30
+    ],
+    "textScalePercent": 150,
+    "masks": [
+      {
+        "x": 60,
+        "y": 270,
+        "width": 270,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 1365,
+        "y": 270,
+        "width": 45,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 330,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 1365,
+        "y": 330,
+        "width": 30,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 390,
+        "width": 225,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 1365,
+        "y": 390,
+        "width": 30,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 450,
+        "width": 105,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 60,
+        "y": 510,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 180,
+        "y": 630,
+        "width": 555,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 510,
+        "y": 660,
+        "width": 45,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 900,
+        "y": 660,
+        "width": 45,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 390,
+        "y": 690,
+        "width": 540,
+        "height": 30,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "11b4e24020aa321cbda9dadf156d71a42f924964f847b863ca798997637be5ef"
+  },
+  {
+    "screen": "ccmux-attention-wide-recovery",
+    "file": "screens/ccmux-attention-wide-recovery-960x600.png",
+    "size": "960x600",
+    "clientCells": [
+      120,
+      40
+    ],
+    "popupCells": [
+      96,
+      30
+    ],
+    "textScalePercent": 100,
+    "masks": [
+      {
+        "x": 40,
+        "y": 180,
+        "width": 180,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 910,
+        "y": 180,
+        "width": 30,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 220,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 910,
+        "y": 220,
+        "width": 20,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 260,
+        "width": 150,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 910,
+        "y": 260,
+        "width": 20,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 300,
+        "width": 70,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 40,
+        "y": 340,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 730,
+        "y": 440,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 260,
+        "y": 460,
+        "width": 360,
+        "height": 20,
+        "kind": "native-id"
+      },
+      {
+        "x": 240,
+        "y": 500,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 500,
+        "y": 500,
+        "width": 360,
+        "height": 20,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "473b996ee00530ddf05a7bac21af1abe508d28d3dd912339b6f591c309f13295"
+  },
+  {
+    "screen": "ccmux-attention-wide-recovery",
+    "file": "screens/ccmux-attention-wide-recovery-1440x900.png",
+    "size": "1440x900",
+    "clientCells": [
+      120,
+      40
+    ],
+    "popupCells": [
+      96,
+      30
+    ],
+    "textScalePercent": 150,
+    "masks": [
+      {
+        "x": 60,
+        "y": 270,
+        "width": 270,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 1365,
+        "y": 270,
+        "width": 45,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 330,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 1365,
+        "y": 330,
+        "width": 30,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 390,
+        "width": 225,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 1365,
+        "y": 390,
+        "width": 30,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 450,
+        "width": 105,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 60,
+        "y": 510,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 1095,
+        "y": 660,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 390,
+        "y": 690,
+        "width": 540,
+        "height": 30,
+        "kind": "native-id"
+      },
+      {
+        "x": 360,
+        "y": 750,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 750,
+        "y": 750,
+        "width": 540,
+        "height": 30,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "8e4d8a671286f9d311214adbfbdfdd624117203f9ef2cc37e193dc5116f1da2b"
+  },
+  {
+    "screen": "ccmux-attention-compact",
+    "file": "screens/ccmux-attention-compact-640x360.png",
+    "size": "640x360",
+    "clientCells": [
+      80,
+      24
+    ],
+    "popupCells": [
+      64,
+      18
+    ],
+    "textScalePercent": 100,
+    "masks": [
+      {
+        "x": 40,
+        "y": 120,
+        "width": 200,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 490,
+        "y": 140,
+        "width": 30,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 160,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 390,
+        "y": 180,
+        "width": 20,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 40,
+        "y": 200,
+        "width": 150,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 570,
+        "y": 200,
+        "width": 20,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 20,
+        "y": 240,
+        "width": 370,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 190,
+        "y": 260,
+        "width": 30,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 450,
+        "y": 260,
+        "width": 30,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 260,
+        "y": 280,
+        "width": 360,
+        "height": 20,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "d994f097013a98ec334fa336c4ab10898f6173a1d1644dc6397c6b44a5bfbe7a"
+  },
+  {
+    "screen": "ccmux-attention-compact",
+    "file": "screens/ccmux-attention-compact-960x540.png",
+    "size": "960x540",
+    "clientCells": [
+      80,
+      24
+    ],
+    "popupCells": [
+      64,
+      18
+    ],
+    "textScalePercent": 150,
+    "masks": [
+      {
+        "x": 60,
+        "y": 180,
+        "width": 300,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 735,
+        "y": 210,
+        "width": 45,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 240,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 585,
+        "y": 270,
+        "width": 30,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 60,
+        "y": 300,
+        "width": 225,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 855,
+        "y": 300,
+        "width": 30,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 30,
+        "y": 360,
+        "width": 555,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 285,
+        "y": 390,
+        "width": 45,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 675,
+        "y": 390,
+        "width": 45,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 390,
+        "y": 420,
+        "width": 540,
+        "height": 30,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "73cb4b18d1ffc45f00f5da49f7c97bb50f8f51d3da3fe17ca436fd255af8e401"
+  },
+  {
+    "screen": "ccmux-attention-compact-recovery",
+    "file": "screens/ccmux-attention-compact-recovery-640x360.png",
+    "size": "640x360",
+    "clientCells": [
+      80,
+      24
+    ],
+    "popupCells": [
+      64,
+      18
+    ],
+    "textScalePercent": 100,
+    "masks": [
+      {
+        "x": 40,
+        "y": 120,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 500,
+        "y": 140,
+        "width": 20,
+        "height": 20,
+        "kind": "wait"
+      },
+      {
+        "x": 240,
+        "y": 200,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 260,
+        "y": 220,
+        "width": 360,
+        "height": 20,
+        "kind": "native-id"
+      },
+      {
+        "x": 240,
+        "y": 260,
+        "width": 110,
+        "height": 20,
+        "kind": "project"
+      },
+      {
+        "x": 150,
+        "y": 280,
+        "width": 360,
+        "height": 20,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "caa441b32497f4460d7d9e882ea856fbfa908b3e96386ffe5cae28a7c20b4d4e"
+  },
+  {
+    "screen": "ccmux-attention-compact-recovery",
+    "file": "screens/ccmux-attention-compact-recovery-960x540.png",
+    "size": "960x540",
+    "clientCells": [
+      80,
+      24
+    ],
+    "popupCells": [
+      64,
+      18
+    ],
+    "textScalePercent": 150,
+    "masks": [
+      {
+        "x": 60,
+        "y": 180,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 750,
+        "y": 210,
+        "width": 30,
+        "height": 30,
+        "kind": "wait"
+      },
+      {
+        "x": 360,
+        "y": 300,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 390,
+        "y": 330,
+        "width": 540,
+        "height": 30,
+        "kind": "native-id"
+      },
+      {
+        "x": 360,
+        "y": 390,
+        "width": 165,
+        "height": 30,
+        "kind": "project"
+      },
+      {
+        "x": 225,
+        "y": 420,
+        "width": 540,
+        "height": 30,
+        "kind": "native-id"
+      }
+    ],
+    "approval": "proposed",
+    "sha256": "4f2bd544d8be506d6f6aef783f2711e4698a4fd3e0608031ebe62f917afafd37"
+  }
+]

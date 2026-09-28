@@ -1,0 +1,57 @@
+{
+  "status": "synthetic illustrative data",
+  "rows": [
+    {
+      "project": "architectural-reference-documentation",
+      "agent": "Codex",
+      "source": "Mac",
+      "state": "Waiting input",
+      "count": 2,
+      "reason": "Input / approval",
+      "wait": "12m",
+      "nativeId": "0195a100-0000-7000-8000-000000000001"
+    },
+    {
+      "project": "api-workers",
+      "agent": "Codex",
+      "source": "WB-payments",
+      "state": "Error stop (last)",
+      "count": 1,
+      "reason": "Error",
+      "wait": "4m",
+      "nativeId": "0195a100-0000-7000-8000-000000000002"
+    },
+    {
+      "project": "question-report",
+      "agent": "Codex",
+      "source": "Mac",
+      "state": "Reply ready",
+      "count": 1,
+      "reason": "Reply",
+      "wait": "2m",
+      "nativeId": "0195a100-0000-7000-8000-000000000003"
+    },
+    {
+      "project": "toolkit",
+      "agent": "Claude",
+      "source": "Mac",
+      "state": "Working",
+      "count": 0,
+      "reason": "-",
+      "wait": "-",
+      "nativeId": null
+    },
+    {
+      "project": "sandbox-run",
+      "agent": "Codex",
+      "source": "WB-sandbox",
+      "state": "Unknown",
+      "count": 0,
+      "reason": "-",
+      "wait": "-",
+      "nativeId": "0195a100-0000-7000-8000-000000000004"
+    }
+  ],
+  "pendingItemCount": 4,
+  "pendingRowCount": 3
+}

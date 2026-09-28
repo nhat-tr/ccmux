@@ -47,6 +47,7 @@ mock.module("./utils/sse", () => ({
 const switchToPaneSpy = mock(
   async (_target: string): Promise<SwitchToPaneResult> => true,
 );
+const switchToWorkbenchPaneSpy = mock(async () => true as const);
 const sendKeysSpy = mock(
   async (
     _target: string,
@@ -83,6 +84,7 @@ const realTmux = await import("./utils/tmux");
 mock.module("./utils/tmux", () => ({
   ...realTmux,
   switchToPane: switchToPaneSpy,
+  switchToWorkbenchPane: switchToWorkbenchPaneSpy,
   sendKeys: sendKeysSpy,
   capturePane: async () => "",
   flashPane: flashPaneSpy,
@@ -210,6 +212,8 @@ beforeEach(() => {
   sseCallbacks = null;
   switchToPaneSpy.mockClear();
   switchToPaneSpy.mockImplementation(async (_target: string) => true);
+  switchToWorkbenchPaneSpy.mockClear();
+  switchToWorkbenchPaneSpy.mockImplementation(async () => true as const);
   sendKeysSpy.mockClear();
   sendKeysSpy.mockImplementation(async () => true);
   flashPaneSpy.mockClear();
@@ -255,6 +259,60 @@ async function renderApp(
   return setup.captureCharFrame();
 }
 
+function attentionSession(
+  id: string,
+  sourceKind: "host" | "workbench",
+  pending = true,
+) {
+  return mockEnrichedSession({
+    id,
+    agentType: "codex",
+    trackingMode: sourceKind === "host" ? "native" : "imported",
+    nativeSessionId: `runtime-${id}`,
+    project: id,
+    cwd: `/work/${id}`,
+    status: pending ? "waiting" : "idle",
+    tmuxPane: sourceKind === "host" ? "%7" : null,
+    pid: sourceKind === "host" ? 42 : null,
+    codexAttention: {
+      identity: { sourceId: sourceKind, runtimeSessionId: `runtime-${id}` },
+      source: {
+        sourceId: sourceKind,
+        sourceKind,
+        sourceLabel: sourceKind === "host" ? "Mac" : "Workbench WB-payments",
+        ...(sourceKind === "workbench" ? { workbenchName: "WB-payments" } : {}),
+      },
+      project: { name: id, directory: `/work/${id}` },
+      workState: pending ? "waiting" : "not-working",
+      coverage: null,
+      pendingItems: pending
+        ? [
+            {
+              eventId: `event-${id}`,
+              sourceId: sourceKind,
+              sourceKind,
+              sourceLabel:
+                sourceKind === "host" ? "Mac" : "Workbench WB-payments",
+              project: { name: id, directory: `/work/${id}` },
+              runtimeDirectory: `/work/${id}`,
+              runtimeSessionId: `runtime-${id}`,
+              reason: "input-required" as const,
+              priority: "required" as const,
+              inputKind: "user-input" as const,
+              waitingMilliseconds: 60_000,
+              recoveryInstructions: [
+                sourceKind === "workbench"
+                  ? "Host: workbench attach WB-payments"
+                  : `cd /work/${id}`,
+              ],
+            },
+          ]
+        : [],
+      localActionEligibility: sourceKind === "host" ? "eligible" : "ineligible",
+    },
+  });
+}
+
 /**
  * Mocks the sidebar-hydration fetch used by App.tsx's onMount:
  * `fetch(`${getDaemonUrl()}/sidebar-state`).then(r => r.json()).then(data =>
@@ -297,6 +355,292 @@ function mockSidebarStateFetch(payload: Record<string, unknown>) {
 }
 
 describe("App", () => {
+  it("renders attention mode and toggles pending-only rows with f", async () => {
+    await renderApp(96, 30, { attention: true });
+    sseCallbacks!.onInit(
+      [
+        attentionSession("pending", "host"),
+        attentionSession("clear", "host", false),
+      ],
+      null,
+    );
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("All tracked (2)");
+
+    setup.mockInput.pressKey("f");
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    expect(frame).toContain("Attention only (1)");
+    expect(frame).toContain("pending");
+    expect(frame).not.toContain("Selected: clear");
+  });
+
+  it("retains a Workbench row and shows recovery when Enter cannot verify it", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string" || input instanceof URL
+          ? input.toString()
+          : input.url;
+      return url.includes("/attention-target")
+        ? new Response(JSON.stringify({ reason: "remote-marker-missing" }), {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          })
+        : new Response(JSON.stringify({ socketPath: null }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+    }) as typeof fetch;
+    try {
+      await renderApp(96, 30, { attention: true });
+      sseCallbacks!.onInit([attentionSession("remote", "workbench")], null);
+      await setup.renderOnce();
+
+      setup.mockInput.pressEnter();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await setup.renderOnce();
+      const frame = setup.captureCharFrame();
+      expect(switchToPaneSpy).not.toHaveBeenCalled();
+      expect(switchToWorkbenchPaneSpy).not.toHaveBeenCalled();
+      expect(frame).toContain("Pane verification failed");
+      expect(frame).toContain("workbench attach WB-payments");
+      expect(frame).toContain("no resume performed");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("opens only the exact verified Workbench pane for the invoking client", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string" || input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url.includes("/attention-target")) {
+        return new Response(
+          JSON.stringify({
+            kind: "workbench",
+            workbenchName: "WB-payments",
+            sessionName: "main",
+            windowIndex: 2,
+            paneId: "%9",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ socketPath: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    const { restore } = withExitSpy();
+    try {
+      await renderApp(96, 30, { attention: true });
+      sseCallbacks!.onInit([attentionSession("remote", "workbench")], null);
+      await setup.renderOnce();
+      setup.mockInput.pressEnter();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(switchToWorkbenchPaneSpy).toHaveBeenCalledWith({
+        kind: "workbench",
+        workbenchName: "WB-payments",
+        sessionName: "main",
+        windowIndex: 2,
+        paneId: "%9",
+      });
+      expect(switchToPaneSpy).not.toHaveBeenCalled();
+    } finally {
+      restore();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("switches only to the pane returned by attention verification", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string" || input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url.includes("/attention-target")) {
+        return new Response(
+          JSON.stringify({ kind: "host", paneId: "%verified" }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      return new Response(JSON.stringify({ socketPath: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    const { restore } = withExitSpy();
+    try {
+      await renderApp(96, 30, { attention: true });
+      sseCallbacks!.onInit([attentionSession("local", "host")], null);
+      await setup.renderOnce();
+      setup.mockInput.pressEnter();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await setup.renderOnce();
+      expect(switchToPaneSpy).toHaveBeenCalledWith("%verified");
+    } finally {
+      restore();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("opens a pane-backed row that has no imported attention metadata", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string" || input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url.includes("/attention-target")) {
+        return Response.json({ kind: "host", paneId: "%verified-plain" });
+      }
+      return Response.json({ socketPath: null });
+    }) as typeof fetch;
+    const { restore: restoreExit } = withExitSpy();
+    try {
+      await renderApp(96, 30, { attention: true });
+      sseCallbacks!.onInit(
+        [
+          mockEnrichedSession({
+            id: "local-pane",
+            agentType: "codex",
+            tmuxPane: "%plain",
+            codexAttention: undefined,
+          }),
+        ],
+        null,
+      );
+      await setup.renderOnce();
+
+      setup.mockInput.pressEnter();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(switchToPaneSpy).toHaveBeenCalledWith("%verified-plain");
+      expect(setup.captureCharFrame()).not.toContain(
+        "Pane verification failed",
+      );
+    } finally {
+      restoreExit();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("attaches a live background row from the attention dashboard", async () => {
+    const { restore } = withExitSpy();
+    try {
+      await renderApp(96, 30, { attention: true });
+      sseCallbacks!.onInit(
+        [
+          mockEnrichedSession({
+            id: "background-worker",
+            agentType: "claude",
+            trackingMode: "background",
+            tmuxPane: null,
+            pid: 42,
+            codexAttention: undefined,
+          }),
+        ],
+        null,
+      );
+      await setup.renderOnce();
+
+      setup.mockInput.pressEnter();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(openAgentAttachWindowSpy).toHaveBeenCalledWith(
+        "background-worker",
+        expect.any(String),
+      );
+      expect(setup.captureCharFrame()).not.toContain(
+        "Pane verification failed",
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("clears every pending record for the selected Runtime Session with c", async () => {
+    const originalSpawn = Bun.spawn;
+    const spawnedArguments: string[][] = [];
+    Bun.spawn = ((arguments_: string[]) => {
+      spawnedArguments.push(arguments_);
+      return { exited: Promise.resolve(0) };
+    }) as unknown as typeof Bun.spawn;
+    try {
+      await renderApp(96, 30, { attention: true });
+      sseCallbacks!.onInit([attentionSession("pending", "host")], null);
+      await setup.renderOnce();
+
+      setup.mockInput.pressKey("c");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await setup.renderOnce();
+
+      expect(spawnedArguments).toEqual([
+        ["agent-attention", "clear-row", "host", "runtime-pending"],
+      ]);
+      expect(setup.captureCharFrame()).toContain("Attention dismissed");
+      expect(setup.captureCharFrame()).toContain(
+        "0 attention items / 0 sessions",
+      );
+    } finally {
+      Bun.spawn = originalSpawn;
+    }
+  });
+
+  it("dismisses a Claude waiting request through the daemon with c", async () => {
+    const originalFetch = globalThis.fetch;
+    const seenRequests: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string" || input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url.includes("/seen")) {
+        seenRequests.push(url);
+        return Response.json({ success: true });
+      }
+      return Response.json({ socketPath: null });
+    }) as typeof fetch;
+    try {
+      await renderApp(96, 30, { attention: true });
+      sseCallbacks!.onInit(
+        [
+          mockEnrichedSession({
+            id: "claude-waiting",
+            agentType: "claude",
+            status: "waiting",
+            attentionType: "question",
+            attentionState: null,
+            codexAttention: undefined,
+          }),
+        ],
+        null,
+      );
+      await setup.renderOnce();
+
+      setup.mockInput.pressKey("c");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await setup.renderOnce();
+
+      expect(seenRequests).toHaveLength(1);
+      expect(seenRequests[0]).toContain("/sessions/claude-waiting/seen");
+      expect(setup.captureCharFrame()).toContain("Attention dismissed");
+      expect(setup.captureCharFrame()).toContain(
+        "0 attention items / 0 sessions",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("renders header and footer on mount", async () => {
     const frame = await renderApp();
     expect(frame).toContain("Sessions");
@@ -3066,7 +3410,9 @@ describe("App new session dialog", () => {
         spawns.push(JSON.parse(String(init?.body ?? "{}")) as SpawnBody);
         return Response.json(
           options.spawnBody ?? { success: true, paneId: "%99" },
-          { status: options.spawnStatus ?? 200 },
+          {
+            status: options.spawnStatus ?? 200,
+          },
         );
       }
       return Response.json({});
@@ -7570,9 +7916,7 @@ describe("App worktrees panel (W)", () => {
             }
           : url.includes("/prs")
             ? {
-                repos: [
-                  { repoRoot: "/code/myapp", repoName: "myapp", prs },
-                ],
+                repos: [{ repoRoot: "/code/myapp", repoName: "myapp", prs }],
                 errors: [],
               }
             : {};

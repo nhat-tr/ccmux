@@ -674,6 +674,8 @@ interface TUIStoreOptions {
   /** Last agent spawned from the new-session dialog, restored from UIState. */
   lastSpawnAgent?: string;
   sidebar?: boolean;
+  /** Use pending-item priority, pending/all filtering, and cached metadata search. */
+  attentionMode?: boolean;
   /** Override state persistence (pass no-op in tests) */
   onPersistState?: (updates: Partial<UIState>) => void | Promise<void>;
   /** How long a finished invoke row lingers before removal. Defaults to
@@ -726,6 +728,72 @@ function computePinnedFromOrder(
  * persists independently of this window.
  */
 export const INVOKE_FINISHED_LINGER_MS = 6000;
+
+function pendingAttentionItems(session: EnrichedSession) {
+  return session.codexAttention?.pendingItems ?? [];
+}
+
+function sessionHasAttention(session: EnrichedSession): boolean {
+  if (pendingAttentionItems(session).length > 0) return true;
+  if (session.codexAttention) return false;
+  return (
+    (session.status === "waiting" && session.attentionState !== "read") ||
+    session.attentionState === "unread"
+  );
+}
+
+function attentionPriority(session: EnrichedSession): number {
+  const pendingItems = pendingAttentionItems(session);
+  if (pendingItems.some((item) => item.reason === "input-required")) return 0;
+  if (pendingItems.some((item) => item.reason === "error")) return 1;
+  if (pendingItems.some((item) => item.reason === "reply-ready")) return 2;
+  if (session.status === "waiting") return 0;
+  return 3;
+}
+
+function longestAttentionWaitMilliseconds(session: EnrichedSession): number {
+  return pendingAttentionItems(session).reduce(
+    (longest, item) => Math.max(longest, item.waitingMilliseconds),
+    0,
+  );
+}
+
+function attentionActivityTimeMilliseconds(
+  session: EnrichedSession,
+): number | null {
+  if (session.lastActivityAt) {
+    const transcriptActivityTimeMilliseconds = Date.parse(
+      session.lastActivityAt,
+    );
+    if (Number.isFinite(transcriptActivityTimeMilliseconds)) {
+      return transcriptActivityTimeMilliseconds;
+    }
+  }
+  const nativeUpdatedAtSeconds = session.codexAttention?.nativeUpdatedAt;
+  return nativeUpdatedAtSeconds === undefined
+    ? null
+    : nativeUpdatedAtSeconds * 1000;
+}
+
+function attentionSearchText(session: EnrichedSession): string {
+  const attention = session.codexAttention;
+  const pendingTerms = (attention?.pendingItems ?? []).flatMap((item) => [
+    item.reason,
+    item.inputKind ?? "",
+  ]);
+  return [
+    attention?.runtimeSessionName ?? "",
+    session.summary ?? "",
+    attention?.source.sourceLabel ?? "",
+    attention?.source.workbenchName ?? "",
+    attention?.identity.sourceId ?? "",
+    attention?.identity.runtimeSessionId ?? session.nativeSessionId ?? "",
+    attention?.project.name ?? "",
+    attention?.project.directory ?? "",
+    session.cwd,
+    ...pendingTerms,
+  ].join(" ");
+}
 
 /**
  * Build the paneless `EnrichedSession` the board shows for a subprocess
@@ -809,9 +877,11 @@ const PROMPT_DISPLAY_LABEL: Record<PromptDisplay, string> = {
 
 export function createTUIStore(options: TUIStoreOptions = {}) {
   const [tick, setTick] = createSignal(0);
-  const searchPaneContentEnabled = options.searchPaneContent ?? true;
+  const searchPaneContentEnabled =
+    !options.attentionMode && (options.searchPaneContent ?? true);
   const searchPaneLines = options.searchPaneLines ?? 100;
-  const searchTranscriptEnabled = options.searchTranscript ?? true;
+  const searchTranscriptEnabled =
+    !options.attentionMode && (options.searchTranscript ?? true);
   /** Shortest query that triggers the transcript search (matches the daemon's
    *  MIN_QUERY_LEN; kept local so the TUI bundle doesn't import daemon code). */
   const MIN_TRANSCRIPT_QUERY_LEN = 2;
@@ -980,8 +1050,10 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
     columns: options.columns,
     promptLines: options.promptLines,
     breakpoints: options.breakpoints,
-    groupBy: options.groupBy ?? DEFAULT_GROUP_BY,
-    hideIdle: options.hideIdle ?? false,
+    groupBy: options.attentionMode
+      ? "none"
+      : (options.groupBy ?? DEFAULT_GROUP_BY),
+    hideIdle: options.attentionMode ? false : (options.hideIdle ?? false),
   });
 
   // Effect: capture pane content for search (debounced)
@@ -1097,6 +1169,32 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
   const sortedSessions = trackedMemo(
     "sortedSessions",
     () => {
+      if (options.attentionMode) {
+        const sessions = [...state.sessions];
+        sessions.sort((left, right) => {
+          const leftActivityTimeMilliseconds =
+            attentionActivityTimeMilliseconds(left);
+          const rightActivityTimeMilliseconds =
+            attentionActivityTimeMilliseconds(right);
+          if (leftActivityTimeMilliseconds !== rightActivityTimeMilliseconds) {
+            if (leftActivityTimeMilliseconds === null) return 1;
+            if (rightActivityTimeMilliseconds === null) return -1;
+            return rightActivityTimeMilliseconds - leftActivityTimeMilliseconds;
+          }
+          const priorityDifference =
+            attentionPriority(left) - attentionPriority(right);
+          if (priorityDifference !== 0) return priorityDifference;
+          const waitDifference =
+            longestAttentionWaitMilliseconds(right) -
+            longestAttentionWaitMilliseconds(left);
+          if (waitDifference !== 0) return waitDifference;
+          const projectDifference = left.project.localeCompare(right.project);
+          return projectDifference !== 0
+            ? projectDifference
+            : left.id.localeCompare(right.id);
+        });
+        return sessions;
+      }
       const statusOrder: Record<string, number> = {
         waiting: 0,
         working: 1,
@@ -1133,9 +1231,12 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
   const statusFilteredSessions = trackedMemo("statusFilteredSessions", () => {
     const sorted = sortedSessions();
     if (!state.hideIdle) return sorted;
-    const filtered = sorted.filter(
-      (s) => s.status !== "idle" || s.attentionState !== null,
-    );
+    const filtered = options.attentionMode
+      ? sorted.filter((session) => sessionHasAttention(session))
+      : sorted.filter(
+          (session) =>
+            session.status !== "idle" || session.attentionState !== null,
+        );
     // Preserve reference when filter removes nothing to avoid downstream recomputation
     return filtered.length === sorted.length ? sorted : filtered;
   });
@@ -1191,6 +1292,8 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
         "lastPrompt",
         (s: EnrichedSession) =>
           groupBy === "none" ? "" : getGroupKey(s, groupBy),
+        (s: EnrichedSession) =>
+          options.attentionMode ? attentionSearchText(s) : "",
       ],
       threshold: 0.3,
     });
@@ -1307,6 +1410,7 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
               fzResult[0]?.score ?? 0,
               fzResult[2]?.score ?? 0,
               fzResult[4]?.score ?? 0,
+              fzResult[5]?.score ?? 0,
             )
           : 0;
         const cwdFz = fzResult?.[1]?.score ?? 0;
@@ -2423,6 +2527,22 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
       setSelectedHeaderKey(null);
       persistUIState({ hideIdle: next });
       this.showToast(next ? "Hide Idle ON" : "Hide Idle OFF");
+    },
+
+    toggleAttentionPending() {
+      const next = !state.hideIdle;
+      const selected = state.selectedSessionId
+        ? state.sessions.find(
+            (session) => session.id === state.selectedSessionId,
+          )
+        : undefined;
+      batch(() => {
+        setState("hideIdle", next);
+        if (next && selected && !sessionHasAttention(selected)) {
+          setState("selectedSessionId", null);
+        }
+        setSelectedHeaderKey(null);
+      });
     },
 
     cycleGroupBy() {

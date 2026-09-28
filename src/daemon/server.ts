@@ -9,6 +9,7 @@ import {
   isCcmuxPane,
   resolvedHomeDir,
 } from "../lib/config";
+import { writeAttentionCache } from "../lib/attention-cache";
 import { getPreferences } from "../lib/preferences";
 import { listTmuxClientTtys } from "../lib/tmux-client";
 import { tmuxArgv } from "../lib/tmux-exec";
@@ -25,6 +26,7 @@ import { resolveSessionRef } from "./session-ref";
 import type { SessionRefResolution } from "./session-ref";
 import { MAX_TURNS, parseTurnsField, renderTurns } from "./transcript-read";
 import { readSessionTranscript } from "./transcript-readers";
+import { extractSessionIdFromPath, readFirstLine } from "./parser";
 import {
   AMBIGUOUS_WAIT_ERROR,
   checkForegroundLiveness,
@@ -91,9 +93,18 @@ import { listSpawnableAgents, spawnBinaryFor } from "../lib/spawnable-agents";
 import {
   getMarkerKey,
   isBackgroundSession,
+  isImportedSession,
   type SessionManager,
   type SessionEvent,
 } from "./sessions";
+import { parseCodexAttentionSnapshot } from "./adapters/codex/attention-import";
+import { CodexLogAdapter } from "./adapters/codex/log-adapter";
+import { getSessionPidMarker } from "./session-markers";
+import { resolveAttentionNavigationTarget } from "./attention-navigation";
+import {
+  resolveWorkbenchAttentionNavigationTarget,
+  type WorkbenchAttentionNavigationResult,
+} from "./workbench-attention-navigation";
 import type {
   SSEEvent,
   FinishedInvocationStatus,
@@ -505,6 +516,9 @@ export function invocationEventToSSE(event: InvocationEvent): SSEEvent {
  */
 const MAX_INVOKE_PROMPT_BYTES = 256 * 1024;
 const STATE_CHANGING_METHODS = new Set(["POST", "DELETE", "PUT", "PATCH"]);
+const IMPORTED_SESSION_ACTION_ERROR =
+  "Imported Codex sessions do not support local session actions.";
+const codexAttentionLogAdapter = new CodexLogAdapter();
 
 /** Hostnames that legitimately address the loopback-bound daemon socket. */
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -650,6 +664,9 @@ export class DaemonServer {
   /** Reads the daemon's live scan-health snapshot. Follows the getPaneCache /
    *  getAgentByType accessor pattern so the server never imports daemon state. */
   private getScanHealth: () => DaemonHealth;
+  private resolveWorkbenchAttentionTarget: (
+    session: Readonly<Session>,
+  ) => Promise<WorkbenchAttentionNavigationResult>;
   /** When each repo last had `git fetch --prune` run for a prune scan. */
   private worktreeFetchedAt = new Map<string, number>();
   /**
@@ -720,6 +737,9 @@ export class DaemonServer {
     runNotificationAction: NotificationActionRunner | null = null,
     retractNotification: NotificationRetractFn | null = null,
     getScanHealth: () => DaemonHealth = () => ({ degraded: false }),
+    resolveWorkbenchAttentionTarget: (
+      session: Readonly<Session>,
+    ) => Promise<WorkbenchAttentionNavigationResult> = resolveWorkbenchAttentionNavigationTarget,
   ) {
     this.sessionManager = sessionManager;
     this.getPaneCache = getPaneCache;
@@ -731,6 +751,7 @@ export class DaemonServer {
     this.runNotificationAction = runNotificationAction;
     this.retractNotification = retractNotification;
     this.getScanHealth = getScanHealth;
+    this.resolveWorkbenchAttentionTarget = resolveWorkbenchAttentionTarget;
 
     this.handoffQueue = new HandoffQueue({
       onExpire: (record) => {
@@ -809,7 +830,10 @@ export class DaemonServer {
     const paneCache = this.getPaneCache();
     const sessions = this.sessionManager
       .getSessions()
-      .filter((s) => this.visibleSessions.has(s.id));
+      .filter(
+        (session) =>
+          this.visibleSessions.has(session.id) && !isImportedSession(session),
+      );
     const len = sessions.length;
     if (len === 0) return;
     for (let i = 0; i < len; i++) {
@@ -1024,6 +1048,20 @@ export class DaemonServer {
   }
 
   private async enrichSession(session: Session): Promise<EnrichedSession> {
+    if (isImportedSession(session)) {
+      return {
+        ...session,
+        tmuxTarget: null,
+        paneCwd: null,
+        paneTitle: null,
+        summary: null,
+        isWorktree: false,
+        mainRepoRoot: null,
+        worktreeRoot: null,
+        branchPRs: null,
+        originInvocationId: null,
+      };
+    }
     const paneCache = this.getPaneCache();
     const paneInfo = session.tmuxPane ? paneCache.get(session.tmuxPane) : null;
     const tmuxTarget = paneInfo?.target ?? null;
@@ -1198,6 +1236,17 @@ export class DaemonServer {
     return this.sessionManager.getSessions().find((s) => s.tmuxPane === id);
   }
 
+  private importedSessionActionRefusal(
+    session: Readonly<Session>,
+    headers: Record<string, string>,
+  ): Response | null {
+    if (!isImportedSession(session)) return null;
+    return Response.json(
+      { error: IMPORTED_SESSION_ACTION_ERROR },
+      { status: 409, headers },
+    );
+  }
+
   /**
    * Start the HTTP server
    */
@@ -1362,6 +1411,10 @@ export class DaemonServer {
       return await this.handleGetSessions(url, corsHeaders);
     }
 
+    if (path === "/sessions/import" && req.method === "POST") {
+      return await this.handleImportCodexAttention(req, corsHeaders);
+    }
+
     if (path === "/search" && req.method === "GET") {
       return await this.handleSearch(url, corsHeaders);
     }
@@ -1425,6 +1478,17 @@ export class DaemonServer {
     ) {
       const sessionId = path.slice("/sessions/".length, -"/dirty".length);
       return await this.handleSessionDirty(sessionId, url, corsHeaders);
+    }
+
+    if (
+      path.startsWith("/sessions/") &&
+      path.endsWith("/attention-target") &&
+      req.method === "GET"
+    ) {
+      const sessionId = decodeURIComponent(
+        path.slice("/sessions/".length, -"/attention-target".length),
+      );
+      return await this.handleAttentionTarget(sessionId, corsHeaders);
     }
 
     if (path.startsWith("/sessions/") && req.method === "GET") {
@@ -1539,14 +1603,14 @@ export class DaemonServer {
 
   /**
    * Whether a session should be surfaced to clients. Pane-tracked/native
-   * sessions are visible once they have a tmux pane; background
-   * (background-agent) sessions are paneless by nature and visible from
-   * creation (their `created` event IS their visible moment).
+   * sessions are pane-gated, while background and imported sessions are
+   * paneless by contract and visible from creation.
    */
   private isVisibleSession(s: Readonly<Session>): boolean {
     return (
       s.tmuxPane !== null ||
       s.trackingMode === "background" ||
+      s.trackingMode === "imported" ||
       // Transcript-backed native sessions are visible even without a pane:
       // when the binder refuses to guess (ambiguous
       // evidence) the row must be VISIBLY unbound, not hidden — an unbound
@@ -1575,7 +1639,10 @@ export class DaemonServer {
     try {
       const proc = Bun.spawn(
         tmuxArgv("display-message", "-p", "#{socket_path}"),
-        { stdout: "pipe", stderr: "pipe" },
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        },
       );
       const [out, stderr, code] = await Promise.all([
         new Response(proc.stdout).text(),
@@ -1640,6 +1707,44 @@ export class DaemonServer {
     return Response.json(
       { sessions: await this.enrichSessions(sessions) },
       { headers },
+    );
+  }
+
+  private async handleImportCodexAttention(
+    req: Request,
+    headers: Record<string, string>,
+  ): Promise<Response> {
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return Response.json(
+        { error: "Codex attention import body must be valid JSON." },
+        { status: 400, headers },
+      );
+    }
+
+    const parsed = parseCodexAttentionSnapshot(body);
+    if (!parsed.ok) {
+      return Response.json({ error: parsed.error }, { status: 400, headers });
+    }
+
+    try {
+      writeAttentionCache(parsed.snapshot);
+    } catch (error) {
+      return Response.json(
+        {
+          error: `Could not update the private attention cache: ${error instanceof Error ? error.message : String(error)}`,
+        },
+        { status: 500, headers },
+      );
+    }
+
+    return Response.json(
+      this.sessionManager.importCodexAttentionSnapshot(parsed.snapshot),
+      {
+        headers,
+      },
     );
   }
 
@@ -2228,6 +2333,83 @@ export class DaemonServer {
     );
   }
 
+  private async handleAttentionTarget(
+    sessionId: string,
+    headers: Record<string, string>,
+  ): Promise<Response> {
+    const session = this.sessionManager.getSession(sessionId);
+    if (!session) {
+      return Response.json(
+        { error: "Session not found" },
+        { status: 404, headers },
+      );
+    }
+    if (session.codexAttention?.source.sourceKind === "workbench") {
+      const result = await this.resolveWorkbenchAttentionTarget(session);
+      return result.ok
+        ? Response.json(result.target, { headers })
+        : Response.json(
+            {
+              error: "Attention pane verification failed",
+              reason: result.reason,
+            },
+            { status: 409, headers },
+          );
+    }
+
+    const pane = session.tmuxPane
+      ? (this.getPaneCache().get(session.tmuxPane) ?? null)
+      : null;
+    const runtimeSessionId =
+      session.codexAttention?.identity.runtimeSessionId ??
+      session.nativeSessionId;
+    const marker = runtimeSessionId
+      ? getSessionPidMarker(runtimeSessionId)
+      : null;
+    let hasMatchingTranscriptIdentity = false;
+    if (
+      marker === null &&
+      runtimeSessionId !== undefined &&
+      session.logPath !== null
+    ) {
+      if (session.agentType === "codex") {
+        const firstLine = await readFirstLine(session.logPath);
+        const metadata = firstLine
+          ? codexAttentionLogAdapter.parseSessionMetadata(firstLine)
+          : null;
+        hasMatchingTranscriptIdentity =
+          metadata?.nativeSessionId === runtimeSessionId &&
+          metadata.cwd === session.cwd;
+      } else if (session.agentType === "claude") {
+        hasMatchingTranscriptIdentity =
+          extractSessionIdFromPath(session.logPath) === runtimeSessionId;
+      }
+    }
+    const result = resolveAttentionNavigationTarget(
+      session,
+      pane,
+      marker,
+      hasMatchingTranscriptIdentity,
+      (pid) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    );
+    return result.ok
+      ? Response.json({ kind: "host", paneId: result.paneId }, { headers })
+      : Response.json(
+          {
+            error: "Attention pane verification failed",
+            reason: result.reason,
+          },
+          { status: 409, headers },
+        );
+  }
+
   private handleMarkSeen(
     sessionId: string,
     headers: Record<string, string>,
@@ -2283,6 +2465,8 @@ export class DaemonServer {
         { status: 404, headers },
       );
     }
+    const importedRefusal = this.importedSessionActionRefusal(session, headers);
+    if (importedRefusal) return importedRefusal;
 
     const requested = url.searchParams.get("cwd");
     if (requested !== null && !isAbsolute(requested)) {
@@ -2327,14 +2511,17 @@ export class DaemonServer {
     sessionId: string,
     headers: Record<string, string>,
   ): Response {
-    const removed = this.sessionManager.removeSession(sessionId);
-
-    if (!removed) {
+    const session = this.sessionManager.getSession(sessionId);
+    if (!session) {
       return Response.json(
         { error: "Session not found" },
         { status: 404, headers },
       );
     }
+    const importedRefusal = this.importedSessionActionRefusal(session, headers);
+    if (importedRefusal) return importedRefusal;
+
+    this.sessionManager.removeSession(sessionId);
 
     return Response.json({ success: true }, { headers });
   }
@@ -2557,6 +2744,8 @@ export class DaemonServer {
         { status: 404, headers },
       );
     }
+    const importedRefusal = this.importedSessionActionRefusal(session, headers);
+    if (importedRefusal) return importedRefusal;
 
     // Background rows' worker pid is owned by Claude's supervisor, never by
     // ccmux, so a direct SIGTERM is unsafe. If the agent defines a stop
@@ -2693,6 +2882,8 @@ export class DaemonServer {
         { status: 404, headers },
       );
     }
+    const importedRefusal = this.importedSessionActionRefusal(session, headers);
+    if (importedRefusal) return importedRefusal;
 
     if (!session.tmuxPane) {
       return Response.json(
@@ -2757,7 +2948,10 @@ export class DaemonServer {
     try {
       const proc = Bun.spawn(
         tmuxArgv("send-keys", "-t", target, restartCommand, "Enter"),
-        { stdout: "pipe", stderr: "pipe" },
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        },
       );
       const exitCode = await proc.exited;
       if (exitCode !== 0) {
@@ -2849,6 +3043,8 @@ export class DaemonServer {
         { status: 404, headers },
       );
     }
+    const importedRefusal = this.importedSessionActionRefusal(session, headers);
+    if (importedRefusal) return importedRefusal;
 
     if (!session.tmuxPane) {
       return Response.json(
@@ -2953,6 +3149,8 @@ export class DaemonServer {
         { status: 404, headers },
       );
     }
+    const importedRefusal = this.importedSessionActionRefusal(session, headers);
+    if (importedRefusal) return importedRefusal;
 
     if (!session.tmuxPane) {
       return Response.json(
@@ -3018,6 +3216,8 @@ export class DaemonServer {
     }
 
     const session = resolution.session;
+    const importedRefusal = this.importedSessionActionRefusal(session, headers);
+    if (importedRefusal) return importedRefusal;
     // A read CLAMPS a count it can't fully serve (the asymmetry with
     // `POST /handoff`, which refuses, is explained there), but a value that is
     // not a count at all was never a request for N turns and is refused rather
@@ -3244,6 +3444,11 @@ export class DaemonServer {
       return this.refuseRef("from", fromRef, fromResolution, headers);
     }
     const source = fromResolution.session;
+    const importedSourceRefusal = this.importedSessionActionRefusal(
+      source,
+      headers,
+    );
+    if (importedSourceRefusal) return importedSourceRefusal;
 
     // Read through the reader layer IN-PROCESS rather than over HTTP: the
     // endpoint is the same daemon, and a loopback round-trip would only add a
@@ -3355,6 +3560,11 @@ export class DaemonServer {
       return this.refuseRef("to", String(toRef), toResolution, headers);
     }
     const target = toResolution.session;
+    const importedTargetRefusal = this.importedSessionActionRefusal(
+      target,
+      headers,
+    );
+    if (importedTargetRefusal) return importedTargetRefusal;
 
     if (target.id === source.id) {
       return Response.json(
@@ -4172,6 +4382,12 @@ export class DaemonServer {
         error:
           `Session ${fork} is a background agent, which has no pane to fork beside. ` +
           `Forking a background worker is not supported.`,
+      };
+    }
+    if (isImportedSession(session)) {
+      return {
+        ok: false,
+        error: IMPORTED_SESSION_ACTION_ERROR,
       };
     }
     // The destination check is NOT here, because it depends on the agent's
@@ -5128,7 +5344,10 @@ export class DaemonServer {
         const stderr = await new Response(proc.stderr).text();
         return Response.json(
           setupFailure(`tmux ${tmuxCmd} failed: ${stderr.trim()}`),
-          { status: 500, headers },
+          {
+            status: 500,
+            headers,
+          },
         );
       }
 
@@ -5144,7 +5363,10 @@ export class DaemonServer {
       // interpreted as a tmux key name.
       const sendProc = Bun.spawn(
         tmuxArgv("send-keys", "-t", paneId, command, "Enter"),
-        { stdout: "pipe", stderr: "pipe" },
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        },
       );
       const sendExit = await sendProc.exited;
       if (sendExit !== 0) {
@@ -5152,7 +5374,10 @@ export class DaemonServer {
         await killPane();
         return Response.json(
           setupFailure(`Failed to send command to pane: ${stderr.trim()}`),
-          { status: 500, headers },
+          {
+            status: 500,
+            headers,
+          },
         );
       }
 
@@ -5225,7 +5450,10 @@ export class DaemonServer {
       await killPane();
       return Response.json(
         setupFailure(`Failed to spawn session: ${errorMessage(err)}`),
-        { status: 500, headers },
+        {
+          status: 500,
+          headers,
+        },
       );
     }
   }

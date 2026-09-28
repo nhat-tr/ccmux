@@ -55,8 +55,14 @@ import type { SSEEvent, DaemonHealth } from "../types";
 import { BUILTIN_AGENTS, type AgentDef } from "../lib/agents";
 import { BUILD_IDENTITY } from "../lib/build-identity";
 import type { SpawnableAgent } from "../lib/spawnable-agents";
-import type { Session, TmuxPane, EnrichedSession } from "../types/session";
+import type {
+  CodexAttentionSnapshot,
+  Session,
+  TmuxPane,
+  EnrichedSession,
+} from "../types/session";
 import { AttentionTracker } from "./attention-tracker";
+import { importedCodexSessionId } from "./adapters/codex/attention-import";
 import { InvocationManager } from "./invocation-manager";
 import { InvocationRegistry } from "./invokers/registry";
 import { stubInvoker } from "./invokers/test-helpers";
@@ -9959,5 +9965,213 @@ describe("syncPaneSummaries", () => {
     await settle(events, 1);
     expect(events).toHaveLength(1);
     expect(internals.lastPaneSummary.get("claude_pane1")).toBe("Three");
+  });
+});
+
+function codexAttentionSnapshotFixture(): CodexAttentionSnapshot {
+  return {
+    schemaVersion: 1,
+    recordCount: 1,
+    runtimeSessions: [
+      {
+        sourceId: "host",
+        sourceKind: "host",
+        sourceLabel: "Host",
+        project: { name: "host-project", directory: "/host/project" },
+        runtimeDirectory: "/host/project",
+        runtimeSessionId: "native-shared",
+        workState: "waiting",
+      },
+      {
+        sourceId: "workbench:alpha",
+        sourceKind: "workbench",
+        sourceLabel: "Workbench alpha",
+        workbenchName: "alpha",
+        project: { name: "remote-project", directory: "/host/remote" },
+        runtimeDirectory: "/workspace/remote",
+        runtimeSessionId: "native-shared",
+        workState: "not-working",
+      },
+    ],
+    sourceReports: [
+      {
+        sourceId: "host",
+        sourceKind: "host",
+        coverage: "available",
+        observedAt: "2026-09-27T10:00:00.000Z",
+      },
+      {
+        sourceId: "workbench:alpha",
+        sourceKind: "workbench",
+        coverage: "available",
+        observedAt: "2026-09-27T10:00:00.000Z",
+      },
+    ],
+    pendingItems: [
+      {
+        eventId: "workbench:alpha:native-shared:turn-one:reply-ready:",
+        sourceId: "workbench:alpha",
+        sourceKind: "workbench",
+        sourceLabel: "Workbench alpha",
+        workbenchName: "alpha",
+        project: { name: "remote-project", directory: "/host/remote" },
+        runtimeDirectory: "/workspace/remote",
+        runtimeSessionId: "native-shared",
+        nativeTurnId: "turn-one",
+        reason: "reply-ready",
+        priority: "lower",
+        nativeThreadStatus: "idle",
+        nativeTurnStatus: "completed",
+        waitingMilliseconds: 15_000,
+        recoveryInstructions: [
+          "workbench open 'alpha'",
+          "cd '/workspace/remote'",
+          "codex resume 'native-shared'",
+        ],
+      },
+    ],
+  };
+}
+
+describe("Codex attention import endpoint", () => {
+  it("AC-10 imports through GET sessions and normal session events", async () => {
+    const manager = new SessionManager();
+    const pane = fakePane({
+      paneId: "%1",
+      currentCommand: "codex",
+      currentPath: "/host/project",
+    });
+    const paneCache = new Map([[pane.paneId, pane]]);
+    const { internals } = createServer(manager, paneCache);
+    const host = manager.createPaneTrackedSession({
+      paneId: pane.paneId,
+      agentType: "codex",
+      cwd: "/host/project",
+      pid: 101,
+      nativeSessionId: "native-shared",
+    });
+    internals.visibleSessions.add(host.id);
+    const frames: string[] = [];
+    internals.sseClients.set("witness", {
+      id: "witness",
+      controller: { enqueue: (data) => frames.push(data) },
+    });
+
+    const importResponse = await internals.handleRequest(
+      new Request("http://localhost/sessions/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(codexAttentionSnapshotFixture()),
+      }),
+    );
+    await Bun.sleep(25);
+    const sessionsResponse = await internals.handleRequest(
+      new Request("http://localhost/sessions"),
+    );
+    const body = (await sessionsResponse.json()) as {
+      sessions: EnrichedSession[];
+    };
+
+    expect(importResponse.status).toBe(200);
+    expect(body.sessions).toHaveLength(2);
+    expect(
+      body.sessions.find((session) => session.id === host.id)?.codexAttention,
+    ).toMatchObject({
+      identity: { sourceId: "host", runtimeSessionId: "native-shared" },
+      localActionEligibility: "eligible",
+    });
+    expect(
+      body.sessions.find((session) => session.trackingMode === "imported"),
+    ).toMatchObject({
+      nativeSessionId: "native-shared",
+      project: "remote-project",
+      cwd: "/workspace/remote",
+      mainRepoRoot: null,
+      worktreeRoot: null,
+      branchPRs: null,
+      codexAttention: {
+        localActionEligibility: "ineligible",
+        pendingItems: [{ reason: "reply-ready" }],
+      },
+    });
+    expect(frames.join("\n")).toContain('"type":"session_created"');
+    expect(frames.join("\n")).toContain('"type":"session_updated"');
+  });
+
+  it("AC-23 rejects local-only actions for an imported row", async () => {
+    const manager = new SessionManager();
+    const paneSendDeps = {
+      sendLiteralToPane: mock(async () => true),
+      sendPromptToPane: mock(async () => true),
+    };
+    const { internals } = createServer(
+      manager,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      paneSendDeps,
+    );
+    await internals.handleRequest(
+      new Request("http://localhost/sessions/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(codexAttentionSnapshotFixture()),
+      }),
+    );
+    const sessionId = importedCodexSessionId({
+      sourceId: "workbench:alpha",
+      runtimeSessionId: "native-shared",
+    });
+    const requests = [
+      new Request(`http://localhost/sessions/${sessionId}/send`, {
+        method: "POST",
+        body: JSON.stringify({ text: "do not send" }),
+      }),
+      new Request(`http://localhost/sessions/${sessionId}/restart`, {
+        method: "POST",
+      }),
+      new Request(`http://localhost/sessions/${sessionId}/kill`, {
+        method: "POST",
+      }),
+      new Request(`http://localhost/sessions/${sessionId}/screen`),
+      new Request(`http://localhost/sessions/${sessionId}/transcript`),
+      new Request(`http://localhost/sessions/${sessionId}/dirty`),
+      new Request(`http://localhost/sessions/${sessionId}`, {
+        method: "DELETE",
+      }),
+    ];
+
+    const responses = await Promise.all(
+      requests.map((request) => internals.handleRequest(request)),
+    );
+
+    expect(responses.map((response) => response.status)).toEqual([
+      409, 409, 409, 409, 409, 409, 409,
+    ]);
+    for (const response of responses) {
+      expect(await response.json()).toEqual({
+        error: "Imported Codex sessions do not support local session actions.",
+      });
+    }
+    expect(paneSendDeps.sendLiteralToPane).not.toHaveBeenCalled();
+    expect(paneSendDeps.sendPromptToPane).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe client error for an invalid import body", async () => {
+    const { internals } = createServer();
+
+    const response = await internals.handleRequest(
+      new Request("http://localhost/sessions/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schemaVersion: 2, secret: "do-not-echo" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Codex attention snapshot must use schema version 1.",
+    });
   });
 });

@@ -34,8 +34,17 @@ const result = await Bun.build({
   external: ["x11"],
 });
 
-if (!result.success) {
-  for (const log of result.logs) console.error(log);
+const attentionResult = await Bun.build({
+  entrypoints: ["./src/attention-index.ts"],
+  target: "bun",
+  outdir: STAGING,
+  splitting: true,
+  plugins: [solidPlugin],
+  external: ["x11"],
+});
+
+if (!result.success || !attentionResult.success) {
+  for (const log of [...result.logs, ...attentionResult.logs]) console.error(log);
   process.exit(1);
 }
 

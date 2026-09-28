@@ -902,6 +902,42 @@ describe("SessionManager", () => {
       expect(session?.lastSeenAt).not.toBeNull();
     });
 
+    it("keeps an acknowledged wait read until its attention identity changes", () => {
+      const manager = new SessionManager();
+      manager.createSession("test-id", "/some/path/test-id.jsonl");
+      manager.updateSession("test-id", {
+        status: "waiting",
+        attentionType: "question",
+      });
+      manager.markSeen("test-id");
+
+      manager.updateSession("test-id", {
+        lastActivityAt: new Date().toISOString(),
+      });
+      expect(manager.getSession("test-id")?.attentionState).toBe("read");
+
+      manager.updateSession("test-id", { attentionType: "permission" });
+      expect(manager.getSession("test-id")?.attentionState).toBeNull();
+    });
+
+    it("makes a completed acknowledged wait eligible for new reply attention", () => {
+      const manager = new SessionManager();
+      manager.createSession("test-id", "/some/path/test-id.jsonl");
+      manager.updateSession("test-id", {
+        status: "waiting",
+        attentionType: "question",
+      });
+      manager.markSeen("test-id");
+
+      manager.updateSession("test-id", {
+        status: "idle",
+        attentionType: null,
+      });
+
+      expect(manager.getSession("test-id")?.attentionState).toBeNull();
+      expect(manager.getSession("test-id")?.previousStatus).toBe("waiting");
+    });
+
     it("should set lastSeenAt when transitioning to read", () => {
       const manager = new SessionManager();
       manager.createSession("test-id", "/some/path/test-id.jsonl");

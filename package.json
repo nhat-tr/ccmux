@@ -35,7 +35,8 @@
     "tsconfig.json"
   ],
   "bin": {
-    "ccmux": "./bin/ccmux"
+    "ccmux": "./bin/ccmux",
+    "ccmux-attention": "./bin/ccmux-attention"
   },
   "scripts": {
     "start": "bun src/index.ts",

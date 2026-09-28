@@ -13,8 +13,109 @@ export type SessionStatus = "working" | "waiting" | "idle";
  *   `claude --bg` / the agent view). Paneless: it has a PID, cwd, and a JSONL
  *   transcript but no tmux pane. Sourced entirely from Claude's own
  *   `roster.json` / `state.json`, not from any ccmux hook or pane scan.
+ * - `imported`: a Codex Runtime Session observed outside the host tmux server.
+ *   Its collector snapshot owns lifecycle and status updates.
  */
-export type SessionTrackingMode = "native" | "pane" | "background";
+export type SessionTrackingMode = "native" | "pane" | "background" | "imported";
+
+export type CodexRuntimeSessionSourceKind = "host" | "workbench";
+
+export interface CodexRuntimeSessionIdentity {
+  sourceId: string;
+  runtimeSessionId: string;
+}
+
+export interface CodexRuntimeSessionSource {
+  sourceId: string;
+  sourceKind: CodexRuntimeSessionSourceKind;
+  sourceLabel: string;
+  workbenchName?: string;
+}
+
+export interface CodexRuntimeSessionProject {
+  name: string;
+  directory: string;
+}
+
+export type CodexRuntimeSessionWorkState =
+  | "waiting"
+  | "working"
+  | "not-working";
+
+export interface CodexTokenUsageBreakdown {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+}
+
+export interface CodexSourceCoverage {
+  sourceId: string;
+  sourceKind?: CodexRuntimeSessionSourceKind;
+  coverage: "available" | "unavailable";
+  reason?: string;
+  providerVersion?: string;
+  threadCount?: number;
+  observedAt: string;
+  lastSuccessfulAt?: string;
+  lastSuccessfulProviderVersion?: string;
+  lastSuccessfulThreadCount?: number;
+}
+
+export interface CodexPendingItem extends CodexRuntimeSessionSource {
+  eventId: string;
+  project: CodexRuntimeSessionProject;
+  runtimeDirectory: string;
+  runtimeSessionId: string;
+  nativeTurnId?: string;
+  reason: "input-required" | "error" | "reply-ready";
+  priority: "required" | "lower";
+  inputKind?: "user-input" | "approval";
+  nativeThreadStatus?: string;
+  nativeTurnStatus?: string;
+  waitingMilliseconds: number;
+  recoveryInstructions: string[];
+}
+
+export interface CodexRuntimeSessionSnapshot extends CodexRuntimeSessionSource {
+  project: CodexRuntimeSessionProject;
+  runtimeDirectory: string;
+  runtimeSessionId: string;
+  runtimeSessionName?: string;
+  model?: string;
+  workState: CodexRuntimeSessionWorkState;
+  nativeUpdatedAt?: number;
+  latestTokenUsage?: CodexTokenUsageBreakdown;
+  cumulativeTokenUsage?: CodexTokenUsageBreakdown;
+  modelContextWindow?: number;
+}
+
+/** Private collector cache payload accepted by the daemon import route. */
+export interface CodexAttentionSnapshot {
+  schemaVersion: 1;
+  recordCount: number;
+  runtimeSessions: CodexRuntimeSessionSnapshot[];
+  sourceReports: CodexSourceCoverage[];
+  pendingItems: CodexPendingItem[];
+}
+
+/** Source-scoped native state attached to a ccmux Session row. */
+export interface CodexAttentionMetadata {
+  identity: CodexRuntimeSessionIdentity;
+  source: CodexRuntimeSessionSource;
+  project: CodexRuntimeSessionProject;
+  runtimeSessionName?: string;
+  model?: string;
+  workState: CodexRuntimeSessionWorkState;
+  nativeUpdatedAt?: number;
+  latestTokenUsage?: CodexTokenUsageBreakdown;
+  cumulativeTokenUsage?: CodexTokenUsageBreakdown;
+  modelContextWindow?: number;
+  coverage: CodexSourceCoverage | null;
+  pendingItems: CodexPendingItem[];
+  localActionEligibility: "eligible" | "ineligible";
+}
 
 /**
  * A linked artifact a background agent produced, from `state.json`
@@ -221,6 +322,8 @@ export interface Session {
    * ambiguous").
    */
   ambiguousWait?: boolean;
+  /** Native Codex attention data imported from the private collector cache. */
+  codexAttention?: CodexAttentionMetadata;
 }
 
 /**

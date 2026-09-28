@@ -23,7 +23,11 @@ import {
   type CascadeSource,
   type MarkerSourceMetadata,
 } from "./cascade-evaluator";
-import { isPaneTrackedSession, isBackgroundSession } from "./sessions";
+import {
+  isPaneTrackedSession,
+  isBackgroundSession,
+  isImportedSession,
+} from "./sessions";
 import { resolveDeadProcessState } from "./status-machine";
 import { matchTerminalRule } from "./terminal-detector";
 import { capturePane } from "./pane-io";
@@ -415,11 +419,11 @@ async function reconcileAttentionStates(deps: ReconcilerDeps): Promise<void> {
 
   const sessions = deps.sessionManager.getSessions();
 
-  // Background (background-agent) sessions are paneless and read-only: the
-  // inbox/unread attention semantics clear on pane-viewing, which can never
-  // happen for them, so a finish would stick "unread" forever. Exclude them
-  // from transition tracking (prune below still runs over all sessions).
-  const tracked = sessions.filter((s) => !isBackgroundSession(s));
+  // Background and imported sessions have separate lifecycle owners. Neither
+  // has a local pane that can drive focus-based attention transitions.
+  const tracked = sessions.filter(
+    (session) => !isBackgroundSession(session) && !isImportedSession(session),
+  );
 
   // Check if any session needs active pane info before spawning the subprocess
   const needsActivePaneId = tracked.some(
@@ -439,12 +443,24 @@ async function reconcileAttentionStates(deps: ReconcilerDeps): Promise<void> {
   let needsSave = false;
 
   for (const session of tracked) {
-    // Clear attention and reset transition guard when new work starts
-    if (session.status === "working" || session.status === "waiting") {
+    // Working starts a new attention cycle. A waiting session marked "read"
+    // is an explicit acknowledgement of its current request and remains read
+    // until the request changes or the session leaves waiting.
+    if (session.status === "working") {
       tracker.clearOnNewWork(session.id);
       if (session.attentionState !== null) {
         deps.sessionManager.setAttentionState(session.id, null);
         needsSave = true;
+      }
+      continue;
+    }
+    if (session.status === "waiting") {
+      if (session.attentionState !== "read") {
+        tracker.clearOnNewWork(session.id);
+        if (session.attentionState !== null) {
+          deps.sessionManager.setAttentionState(session.id, null);
+          needsSave = true;
+        }
       }
       continue;
     }

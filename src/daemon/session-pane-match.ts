@@ -1,7 +1,11 @@
 import type { ProcessInfo, TmuxPane } from "../types/session";
 import { CLAUDE_AGENT_DEF } from "../lib/agents";
 import { ZOMBIE_STALE_MS } from "../lib/config";
-import { isBackgroundSession, type SessionManager } from "./sessions";
+import {
+  isBackgroundSession,
+  isImportedSession,
+  type SessionManager,
+} from "./sessions";
 import {
   lazyProcessTree,
   ProcessTree,
@@ -44,14 +48,17 @@ export function matchSessionsToPanes(
 ): void {
   DaemonPerf.incFindIterations(panes.length + agentProcesses.length);
 
-  const sessions: SessionSlice[] = manager.getSessions().map((s) => ({
-    id: s.id,
-    agentType: s.agentType,
-    cwd: s.cwd,
-    tmuxPane: s.tmuxPane,
-    pid: s.pid,
-    isBackground: isBackgroundSession(s),
-  }));
+  const sessions: SessionSlice[] = manager
+    .getSessions()
+    .filter((session) => !isImportedSession(session))
+    .map((session) => ({
+      id: session.id,
+      agentType: session.agentType,
+      cwd: session.cwd,
+      tmuxPane: session.tmuxPane,
+      pid: session.pid,
+      isBackground: isBackgroundSession(session),
+    }));
 
   const bindings: Binding[] = decideScanBindings({
     sessions,
@@ -88,15 +95,18 @@ export function cleanupStaleSessions(
 ): Set<string> {
   const decision = decideStaleCleanup(
     {
-      sessions: manager.getSessions().map((s) => ({
-        id: s.id,
-        agentType: s.agentType,
-        cwd: s.cwd,
-        tmuxPane: s.tmuxPane,
-        pid: s.pid,
-        isBackground: isBackgroundSession(s),
-        updatedAtMs: s.updatedAt.getTime(),
-      })),
+      sessions: manager
+        .getSessions()
+        .filter((session) => !isImportedSession(session))
+        .map((session) => ({
+          id: session.id,
+          agentType: session.agentType,
+          cwd: session.cwd,
+          tmuxPane: session.tmuxPane,
+          pid: session.pid,
+          isBackground: isBackgroundSession(session),
+          updatedAtMs: session.updatedAt.getTime(),
+        })),
       processes: agentProcesses,
       panes,
       nowMs: Date.now(),

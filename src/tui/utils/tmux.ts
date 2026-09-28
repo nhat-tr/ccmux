@@ -12,7 +12,7 @@ import {
 } from "../../lib/tmux-client";
 import { theme } from "../theme";
 
-export { switchToPane } from "./client-switch";
+export { switchToPane, switchToWorkbenchPane } from "./client-switch";
 
 /**
  * Capture a pane's visible content. THROWS on failure (spawn error or non-zero

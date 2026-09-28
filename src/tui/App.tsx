@@ -41,6 +41,7 @@ import { copyToClipboard } from "./utils/clipboard";
 import { SSEClient } from "./utils/sse";
 import {
   switchToPane,
+  switchToWorkbenchPane,
   sendKeys,
   flashPane,
   flashPaneDetached,
@@ -51,7 +52,11 @@ import {
   type ClientSwitchMiss,
   type OpenAgentsResult,
 } from "./utils/tmux";
-import type { SwitchToPaneResult } from "./utils/client-switch";
+import type {
+  SwitchToPaneResult,
+  SwitchToWorkbenchPaneResult,
+  WorkbenchPaneTarget,
+} from "./utils/client-switch";
 import { tmuxArgv } from "../lib/tmux-exec";
 import { isSameServerCached, setDaemonSocketPath } from "./utils/server-guard";
 import { useSharedTerminalDimensions } from "./utils/use-shared-dimensions";
@@ -97,7 +102,10 @@ import {
   type MoveReport,
 } from "../lib/move-report";
 import { ContextMenu, type ContextMenuItem } from "./components/ContextMenu";
-import { HANDOFF_BADGE } from "./components/session-columns";
+import {
+  HANDOFF_BADGE,
+  formatAttentionAge,
+} from "./components/session-columns";
 import {
   WorktreesPanel,
   liveEffects,
@@ -106,6 +114,11 @@ import {
 import { SourcePicker } from "./components/SourcePicker";
 import type { WorktreeSession } from "../daemon/worktree-prune";
 import { HelpOverlay } from "./components/HelpOverlay";
+import {
+  AttentionDashboard,
+  type AttentionConversationPreview,
+  type AttentionRecovery,
+} from "./components/AttentionDashboard";
 import type { SpawnableAgent } from "../lib/spawnable-agents";
 import { theme } from "./theme";
 import type { IconStyle } from "../lib/icons";
@@ -155,6 +168,7 @@ interface AppProps {
    * Fork action, which is otherwise hidden rather than offered-then-refused.
    */
   forkableAgents?: string[];
+  attention?: boolean;
 }
 
 /** Message text for a rejected fetch/parse, for a toast. */
@@ -250,6 +264,19 @@ const SWITCH_REFUSAL_TOAST: Record<
   "switch-failed": { text: "Failed to switch: pane or client unavailable" },
 };
 
+const WORKBENCH_SWITCH_REFUSAL_TOAST: Record<
+  Exclude<SwitchToWorkbenchPaneResult, true>,
+  { text: string; ms?: number }
+> = {
+  ...SWITCH_REFUSAL_TOAST,
+  "workbench-not-installed": {
+    text: "Cannot open Workbench pane: workbench is not installed",
+  },
+  "workbench-select-failed": {
+    text: "Cannot open Workbench pane: the verified pane is no longer available",
+  },
+};
+
 export function App(props: AppProps) {
   const renderer = useRenderer();
   /** The viewport, for the handful of key handlers that have to agree with
@@ -279,8 +306,90 @@ export function App(props: AppProps) {
     promptDisplay: props.promptDisplay,
     sidebar: props.sidebar,
     lastSpawnAgent: props.lastSpawnAgent,
+    attentionMode: props.attention,
   });
   markStartup("store_created");
+  const [attentionRecovery, setAttentionRecovery] =
+    createSignal<AttentionRecovery | null>(null);
+  const [attentionConversationPreview, setAttentionConversationPreview] =
+    createSignal<AttentionConversationPreview | null>(null);
+
+  createEffect(() => {
+    if (!props.attention) return;
+    const selected = store.selectedSession();
+    if (!selected) {
+      setAttentionConversationPreview(null);
+      return;
+    }
+    const previewRefresh = {
+      sessionId: selected.id,
+      status: selected.status,
+      statusChangedAt: selected.statusChangedAt,
+      attentionGeneration: selected.attentionGeneration,
+    };
+    const sessionId = previewRefresh.sessionId;
+    const controller = new AbortController();
+    setAttentionConversationPreview({
+      sessionId,
+      lastPrompt: undefined,
+      lastResponse: undefined,
+    });
+    const url = new URL(
+      `${getDaemonUrl()}/sessions/${encodeURIComponent(sessionId)}/transcript`,
+    );
+    url.searchParams.set("turns", "2");
+    fetch(url, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const body = (await response.json()) as {
+          turns?: Array<{ role?: unknown; text?: unknown }>;
+        };
+        let lastResponseIndex = -1;
+        let lastResponse: string | null = null;
+        for (
+          let turnIndex = (body.turns?.length ?? 0) - 1;
+          turnIndex >= 0;
+          turnIndex -= 1
+        ) {
+          const turn = body.turns?.[turnIndex];
+          if (turn?.role === "assistant" && typeof turn.text === "string") {
+            lastResponseIndex = turnIndex;
+            lastResponse = turn.text;
+            break;
+          }
+        }
+        let lastPrompt: string | null = null;
+        for (
+          let turnIndex = lastResponseIndex - 1;
+          turnIndex >= 0;
+          turnIndex -= 1
+        ) {
+          const turn = body.turns?.[turnIndex];
+          if (turn?.role === "user" && typeof turn.text === "string") {
+            lastPrompt = turn.text;
+            break;
+          }
+        }
+        return { lastPrompt, lastResponse };
+      })
+      .then((preview) => {
+        if (controller.signal.aborted) return;
+        setAttentionConversationPreview({
+          sessionId,
+          lastPrompt: preview?.lastPrompt ?? null,
+          lastResponse: preview?.lastResponse ?? null,
+        });
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setAttentionConversationPreview({
+          sessionId,
+          lastPrompt: null,
+          lastResponse: null,
+        });
+      });
+    onCleanup(() => controller.abort());
+  });
 
   /** Guard a tmux-targeting action: toast and return false when the pane is on
    *  a different server, so we refuse rather than hit the wrong pane. Reads the
@@ -349,6 +458,10 @@ export function App(props: AppProps) {
    * (issue #102), and the two must not drift on what "go to" means.
    */
   function activateSession(session: EnrichedSession) {
+    if (props.attention) {
+      void activateAttentionSession(session);
+      return;
+    }
     if (session.tmuxPane) {
       store.actions.setActiveSessionId(session.id);
       selectPane(session.tmuxPane);
@@ -360,6 +473,188 @@ export function App(props: AppProps) {
     // on Claude's state.
     if (session.trackingMode === "background") {
       attachBackgroundAgent(session);
+    }
+  }
+
+  function recoveryForAttentionSession(
+    session: EnrichedSession,
+    failureReason?: string,
+  ): AttentionRecovery {
+    const attention = session.codexAttention;
+    const pendingInstructions = attention?.pendingItems.flatMap(
+      (item) => item.recoveryInstructions,
+    );
+    const instructions = [...new Set(pendingInstructions ?? [])];
+    const coverage = attention?.coverage;
+    const coverageAgeFrom =
+      coverage?.coverage === "unavailable"
+        ? (coverage.lastSuccessfulAt ?? coverage.observedAt)
+        : undefined;
+    const source =
+      coverage?.coverage === "unavailable" && coverageAgeFrom
+        ? `${attention?.source.sourceLabel ?? "Mac"} (unavailable ${formatAttentionAge(Date.now() - Date.parse(coverageAgeFrom))})`
+        : (attention?.source.sourceLabel ?? "Mac");
+    const directory =
+      attention?.pendingItems[0]?.runtimeDirectory ??
+      attention?.project.directory ??
+      session.cwd;
+    const runtimeSessionId =
+      attention?.identity.runtimeSessionId ??
+      session.nativeSessionId ??
+      "SESSION_ID";
+    const resumeInstruction =
+      session.agentType === "claude"
+        ? `claude --resume ${runtimeSessionId}`
+        : session.agentType === "codex"
+          ? `codex resume ${runtimeSessionId}`
+          : `Open ${session.agentType} in ${directory}`;
+    return {
+      sessionId: session.id,
+      source,
+      directory,
+      runtimeSessionId:
+        attention?.identity.runtimeSessionId ??
+        session.nativeSessionId ??
+        "unavailable",
+      ...(failureReason === undefined ? {} : { failureReason }),
+      instructions:
+        instructions.length > 0
+          ? instructions
+          : [`cd ${directory}`, resumeInstruction],
+    };
+  }
+
+  async function activateAttentionSession(session: EnrichedSession) {
+    setAttentionRecovery(null);
+    const attention = session.codexAttention;
+    if (!attention && session.trackingMode === "background") {
+      attachBackgroundAgent(session);
+      return;
+    }
+    if (!attention && !session.tmuxPane) {
+      setAttentionRecovery(recoveryForAttentionSession(session));
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${getDaemonUrl()}/sessions/${encodeURIComponent(session.id)}/attention-target`,
+        { signal: AbortSignal.timeout(5_000) },
+      );
+      if (!response.ok) {
+        let failureReason: string | undefined;
+        try {
+          const failure = (await response.json()) as { reason?: unknown };
+          if (typeof failure.reason === "string") {
+            failureReason = failure.reason;
+          }
+        } catch {
+          // The recovery commands remain usable when an older daemon returns
+          // a non-JSON error response.
+        }
+        setAttentionRecovery(
+          recoveryForAttentionSession(session, failureReason),
+        );
+        return;
+      }
+      const target = (await response.json()) as {
+        kind?: unknown;
+        paneId?: unknown;
+        workbenchName?: unknown;
+        sessionName?: unknown;
+        windowIndex?: unknown;
+      };
+      if (target.kind === "host" && typeof target.paneId === "string") {
+        store.actions.setActiveSessionId(session.id);
+        selectPane(target.paneId);
+        return;
+      }
+      if (
+        target.kind !== "workbench" ||
+        typeof target.paneId !== "string" ||
+        typeof target.workbenchName !== "string" ||
+        typeof target.windowIndex !== "number" ||
+        !Number.isSafeInteger(target.windowIndex) ||
+        (target.sessionName !== "main" && target.sessionName !== "editor")
+      ) {
+        setAttentionRecovery(recoveryForAttentionSession(session));
+        return;
+      }
+      const workbenchTarget: WorkbenchPaneTarget = {
+        kind: "workbench",
+        paneId: target.paneId,
+        workbenchName: target.workbenchName,
+        sessionName: target.sessionName,
+        windowIndex: target.windowIndex,
+      };
+      const switchResult = await switchToWorkbenchPane(workbenchTarget);
+      if (switchResult !== true) {
+        const toast = WORKBENCH_SWITCH_REFUSAL_TOAST[switchResult];
+        store.actions.showToast(toast.text, toast.ms);
+        setAttentionRecovery(recoveryForAttentionSession(session));
+        return;
+      }
+      store.actions.setActiveSessionId(session.id);
+      process.exit(0);
+    } catch {
+      setAttentionRecovery(recoveryForAttentionSession(session));
+    }
+  }
+
+  async function dismissSelectedAttention() {
+    const session = store.selectedSession();
+    const attention = session?.codexAttention;
+    if (!session) {
+      store.actions.showToast("No attention to dismiss");
+      return;
+    }
+    if (!attention) {
+      if (session.status !== "waiting" && session.attentionState !== "unread") {
+        store.actions.showToast("No attention to dismiss");
+        return;
+      }
+      try {
+        const response = await fetch(
+          `${getDaemonUrl()}/sessions/${encodeURIComponent(session.id)}/seen`,
+          { method: "POST", signal: AbortSignal.timeout(5_000) },
+        );
+        if (!response.ok) {
+          store.actions.showToast("Could not dismiss attention");
+          return;
+        }
+        store.actions.updateSession({ ...session, attentionState: "read" });
+        store.actions.showToast("Attention dismissed");
+      } catch {
+        store.actions.showToast("Could not dismiss attention");
+      }
+      return;
+    }
+    if (attention.pendingItems.length === 0) {
+      store.actions.showToast("No attention to dismiss");
+      return;
+    }
+    try {
+      const command = Bun.spawn(
+        [
+          "agent-attention",
+          "clear-row",
+          attention.identity.sourceId,
+          attention.identity.runtimeSessionId,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const exitCode = await command.exited;
+      if (exitCode !== 0) {
+        store.actions.showToast("Could not dismiss attention");
+        return;
+      }
+      store.actions.updateSession({
+        ...session,
+        attentionState: null,
+        codexAttention: { ...attention, pendingItems: [] },
+      });
+      store.actions.showToast("Attention dismissed");
+    } catch {
+      store.actions.showToast("Could not dismiss attention");
     }
   }
 
@@ -3634,12 +3929,41 @@ export function App(props: AppProps) {
       }
       if (key === "return" || key === "enter") {
         const session = store.selectedSession();
-        if (session?.tmuxPane) {
+        if (props.attention && session) {
+          void activateAttentionSession(session);
+        } else if (session?.tmuxPane) {
           selectPane(session.tmuxPane);
         }
         event.preventDefault();
         return;
       }
+      return;
+    }
+
+    if (props.attention) {
+      if (key === "j" || key === "down") {
+        setAttentionRecovery(null);
+        store.actions.moveSelection(1);
+      } else if (key === "k" || key === "up") {
+        setAttentionRecovery(null);
+        store.actions.moveSelection(-1);
+      } else if (key === "return" || key === "enter") {
+        const session = store.selectedSession();
+        if (session) void activateAttentionSession(session);
+      } else if (key === "/") {
+        setAttentionRecovery(null);
+        store.actions.enterSearchMode();
+      } else if (key === "f") {
+        setAttentionRecovery(null);
+        store.actions.toggleAttentionPending();
+      } else if (key === "c") {
+        void dismissSelectedAttention();
+      } else if (key === "q" || key === "escape") {
+        process.exit(0);
+      } else {
+        return;
+      }
+      event.preventDefault();
       return;
     }
 
@@ -4030,6 +4354,39 @@ export function App(props: AppProps) {
         break;
     }
   });
+
+  if (props.attention) {
+    return (
+      <TickContext.Provider value={{ tick: store.tick }}>
+        <box flexDirection="column" width="100%" height="100%">
+          <Show when={store.state.searchMode}>
+            <SearchInput
+              value={store.state.searchQuery}
+              onChange={store.actions.setSearchQuery}
+              onSubmit={() => {
+                const session = store.selectedSession();
+                if (session) void activateAttentionSession(session);
+              }}
+            />
+          </Show>
+          <AttentionDashboard
+            sessions={store.filteredSessions().map((row) => row.session)}
+            trackedSessions={store.sortedSessions()}
+            selectedIndex={store.selectedIndex()}
+            pendingOnly={store.state.hideIdle}
+            searchMode={store.state.searchMode}
+            searchQuery={store.state.searchQuery}
+            nowMilliseconds={Date.now() + store.tick() * 0}
+            recovery={attentionRecovery()}
+            conversationPreview={attentionConversationPreview()}
+          />
+          <Show when={store.state.toastMessage}>
+            <Toast message={store.state.toastMessage!} />
+          </Show>
+        </box>
+      </TickContext.Provider>
+    );
+  }
 
   return (
     <TickContext.Provider

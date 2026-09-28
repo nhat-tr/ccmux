@@ -208,7 +208,15 @@ describe("codex reader", () => {
         timestamp: "t1",
         payload: { type: "agent_message", message: "narrating progress" },
       },
-      { type: "response_item", timestamp: "t2", payload: { duplicate: true } },
+      {
+        type: "response_item",
+        timestamp: "t2",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "narrating progress" }],
+        },
+      },
       {
         type: "event_msg",
         timestamp: "t3",
@@ -255,10 +263,123 @@ describe("codex reader", () => {
     ]);
   });
 
+  it("deduplicates parallel response_item and event_msg assistant messages before task completion", async () => {
+    const path = fixture("codex-mixed-in-progress.jsonl", [
+      {
+        type: "response_item",
+        timestamp: "t0",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "check the build" }],
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: "t1",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [
+            { type: "output_text", text: "The build is still running." },
+          ],
+        },
+      },
+      {
+        type: "event_msg",
+        timestamp: "t2",
+        payload: {
+          type: "agent_message",
+          message: "The build is still running.",
+        },
+      },
+    ]);
+
+    const result = await readSessionTranscript(session("codex", path), 1);
+
+    expect(result).toEqual({
+      turns: [
+        {
+          role: "assistant",
+          text: "The build is still running.",
+          timestamp: "t2",
+        },
+      ],
+      truncated: false,
+    });
+  });
+
+  it("reads current response_item prompts and responses", async () => {
+    const path = fixture("codex-response-items.jsonl", [
+      {
+        type: "response_item",
+        timestamp: "t0",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "previous prompt" }],
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: "t1",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Previous response." }],
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: "t2",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "show the last prompt" }],
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: "t3",
+        payload: {
+          type: "message",
+          role: "developer",
+          content: [{ type: "input_text", text: "internal instructions" }],
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: "t4",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "The prompt is visible." }],
+        },
+      },
+    ]);
+    const result = await readSessionTranscript(session("codex", path), 2);
+    expect(result).toEqual({
+      turns: [
+        { role: "assistant", text: "Previous response.", timestamp: "t1" },
+        { role: "user", text: "show the last prompt", timestamp: "t2" },
+        { role: "assistant", text: "The prompt is visible.", timestamp: "t4" },
+      ],
+      truncated: false,
+    });
+  });
+
   it("skips non-event_msg entries and malformed payloads", () => {
     for (const entry of [
       null,
       { type: "response_item", payload: { type: "agent_message" } },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "developer",
+          content: [{ type: "input_text", text: "internal" }],
+        },
+      },
       { type: "event_msg", payload: null },
       { type: "event_msg", payload: { type: "agent_message" } },
       { type: "event_msg", payload: { type: "task_complete" } },
