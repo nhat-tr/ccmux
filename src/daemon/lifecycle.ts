@@ -6,7 +6,7 @@ import {
   closeSync,
   mkdirSync,
 } from "fs";
-import { dirname, resolve } from "path";
+import { basename, dirname, join, resolve } from "path";
 import { spawn } from "child_process";
 import {
   LOG_FILE,
@@ -265,7 +265,8 @@ const SPAWN_CWD = process.cwd();
  * resolved from the caller's directory and bun would fail to start — leaving
  * no daemon and dropping SSE for every TUI. Resolve against `cwd` (the
  * directory at import, before any chdir). A compiled binary has no script
- * path to forward.
+ * path to forward. The attention entrypoint only accepts picker options, so
+ * its daemon process must start through the sibling main entrypoint.
  */
 export function daemonSpawnArgv(
   argv1: string | undefined,
@@ -273,7 +274,16 @@ export function daemonSpawnArgv(
   cwd: string,
 ): string[] {
   if (isStandaloneBinary(argv1, execPath)) return ["daemon", "start"];
-  return [resolve(cwd, argv1!), "daemon", "start"];
+  const currentEntrypoint = resolve(cwd, argv1!);
+  const daemonEntrypoint = basename(currentEntrypoint).startsWith(
+    "attention-index.",
+  )
+    ? join(
+        dirname(currentEntrypoint),
+        basename(currentEntrypoint).replace("attention-index.", "index."),
+      )
+    : currentEntrypoint;
+  return [daemonEntrypoint, "daemon", "start"];
 }
 
 /**

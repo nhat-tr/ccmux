@@ -366,6 +366,23 @@ describe("daemonSpawnArgv", () => {
     ).toEqual(["/opt/ccmux/src/index.ts", "daemon", "start"]);
   });
 
+  it("starts the daemon through the main entrypoint from an attention entrypoint", () => {
+    expect(
+      daemonSpawnArgv(
+        "dist/attention-index.js",
+        "/usr/local/bin/bun",
+        "/opt/ccmux",
+      ),
+    ).toEqual(["/opt/ccmux/dist/index.js", "daemon", "start"]);
+    expect(
+      daemonSpawnArgv(
+        "/opt/ccmux/src/attention-index.ts",
+        "/usr/local/bin/bun",
+        "/elsewhere",
+      ),
+    ).toEqual(["/opt/ccmux/src/index.ts", "daemon", "start"]);
+  });
+
   it("omits the script path for a compiled binary", () => {
     expect(
       daemonSpawnArgv("/$bunfs/root/index.js", "/usr/local/bin/ccmux", "/tmp"),
