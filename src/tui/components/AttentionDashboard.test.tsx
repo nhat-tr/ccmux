@@ -90,7 +90,7 @@ const selected = mockEnrichedSession({
 });
 
 describe("AttentionDashboard", () => {
-  it("renders every required wide-screen region", async () => {
+  it("renders a concise wide-screen dashboard", async () => {
     const setup = await testRender(
       () => (
         <AttentionDashboard
@@ -108,49 +108,64 @@ describe("AttentionDashboard", () => {
           }}
         />
       ),
-      { width: 120, height: 30 },
+      { width: 150, height: 16 },
     );
     renderers.push(setup.renderer);
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
 
-    expect(frame).toContain("Agent attention");
-    expect(frame).toContain("2 attention items / 1 session");
-    expect(frame).toContain("Data sources");
-    expect(frame).toContain("Mac: updated 3s ago");
-    expect(frame).toContain("PROJECT");
+    expect(frame).toContain("Attention  2 pending · 1 session");
+    expect(frame).toContain("architectural-reference-documentation");
     expect(frame).toContain("RUNTIME SESSION");
-    expect(frame).toContain("SOURCE");
-    expect(frame).toContain("ACTIVITY");
-    expect(frame).toContain("NEXT ACTION");
+    expect(frame).toContain("ACTION");
     expect(frame).toContain("CONTEXT");
     expect(frame).toContain("LAST ACTIVE");
     expect(frame).toContain("Review architecture notes");
     expect(frame).toContain("68% left");
-    expect(frame).toContain("500k total · 400k cached input");
-    expect(frame).toContain("Model: gpt-5.6-sol");
     expect(frame).toContain(
-      "Last prompt: Please review the architecture notes and list the risks.",
+      "Context 68% left · 90k / 258k · 500k total · 400k cached input · gpt-5.6-sol",
     );
     expect(frame).toContain(
-      "Last response: The review is complete. Two risks remain.",
+      "Prompt: Please review the architecture notes and list the risks.",
     );
-    expect(frame).toContain("Selected: architectural-reference-documentation");
-    expect(frame).toContain("Answer needed (12m); approval needed (11m)");
-    expect(frame).toContain(
-      "Next: Open the conversation to answer and review the approval request.",
-    );
-    expect(frame).toContain(
-      "Runtime Session ID: 0195a100-0000-7000-8000-000000000001",
-    );
-    expect(frame).toContain("c Dismiss attention");
+    expect(frame).toContain("Reply: The review is complete. Two risks remain.");
+    expect(frame).toContain("c Dismiss");
+    expect(frame).not.toContain("Data sources");
+    expect(frame).not.toContain("Context is Codex context left");
+    expect(frame).not.toContain("Selected:");
+    expect(frame).not.toContain("Opening the conversation");
+    expect(frame).not.toContain("Runtime Session ID:");
+    expect(frame).not.toContain("PROJECT");
+    expect(frame).not.toContain("AGENT");
+    expect(frame).not.toContain("SOURCE");
+    expect(frame).not.toContain("ACTIVITY");
   });
 
-  it("aligns extra-wide row values with their column headers", async () => {
+  it("shows identity columns only when their values differ", async () => {
+    const remote = mockEnrichedSession({
+      id: "remote",
+      agentType: "claude",
+      project: "payments",
+      status: "idle",
+      codexAttention: {
+        ...attention([]),
+        identity: {
+          sourceId: "workbench-payments",
+          runtimeSessionId: "0195a100-0000-7000-8000-000000000099",
+        },
+        source: {
+          sourceId: "workbench-payments",
+          sourceKind: "workbench",
+          sourceLabel: "WB-payments",
+        },
+        project: { name: "payments", directory: "/work/payments" },
+        runtimeSessionName: "Check payment retries",
+      },
+    });
     const setup = await testRender(
       () => (
         <AttentionDashboard
-          sessions={[selected]}
+          sessions={[selected, remote]}
           selectedIndex={0}
           pendingOnly={false}
           searchMode={false}
@@ -175,15 +190,16 @@ describe("AttentionDashboard", () => {
     );
     expect(row!.indexOf("Codex")).toBe(header!.indexOf("AGENT"));
     expect(row!.indexOf("Mac")).toBe(header!.indexOf("SOURCE"));
-    expect(row!.indexOf("Waiting")).toBe(header!.indexOf("ACTIVITY"));
     expect(row!.indexOf("Answer / approve (2)")).toBe(
-      header!.indexOf("NEXT ACTION"),
+      header!.indexOf("ACTION"),
     );
     expect(row!.indexOf("68% left")).toBe(header!.indexOf("CONTEXT"));
     expect(row!.indexOf("2h")).toBe(header!.indexOf("LAST ACTIVE"));
     expect(header!.trimEnd().endsWith("LAST ACTIVE")).toBe(true);
-    expect(header!.indexOf("RUNTIME SESSION")).toBeLessThan(30);
-    expect(header!.trimEnd().length).toBeLessThanOrEqual(150);
+    expect(header!.indexOf("RUNTIME SESSION")).toBeGreaterThan(
+      header!.indexOf("PROJECT"),
+    );
+    expect(header!.trimEnd().length).toBeLessThanOrEqual(145);
   });
 
   it("keeps required details and actions reachable in the compact layout", async () => {
@@ -205,12 +221,10 @@ describe("AttentionDashboard", () => {
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
 
-    expect(frame).toContain(
-      "Identity / activity / next action / context / idle",
-    );
-    expect(frame).toContain("Rows 1–1 of 1");
-    expect(frame).toContain("Runtime Session ID");
-    expect(frame).toContain("Enter Go to conversation");
+    expect(frame).toContain("SESSION / ACTION / CONTEXT / ACTIVE");
+    expect(frame).toContain("1–1 / 1");
+    expect(frame).not.toContain("Runtime Session ID");
+    expect(frame).toContain("Enter Open");
     expect(frame).toContain("Esc Close");
   });
 
@@ -250,13 +264,42 @@ describe("AttentionDashboard", () => {
 
     expect(frame).toContain("Trace the daemon resume failure");
     expect(frame).toContain("Read reply");
-    expect(frame).toContain("Last active: 17m ago");
+    expect(frame).toContain("17m");
     expect(frame).toContain(
-      "Last prompt: Find why the daemon drops this session on resume.",
+      "Prompt: Find why the daemon drops this session on resume.",
     );
     expect(frame).toContain(
-      "Last response: The resume path discards the daemon identity.",
+      "Reply: The resume path discards the daemon identity.",
     );
+  });
+
+  it("uses the session ID when no runtime session name is available", async () => {
+    const unnamed = mockEnrichedSession({
+      id: "0195a100-0000-7000-8000-123456789abc",
+      summary: null,
+      nativeSessionId: undefined,
+      codexAttention: undefined,
+    });
+    const setup = await testRender(
+      () => (
+        <AttentionDashboard
+          sessions={[unnamed]}
+          selectedIndex={0}
+          pendingOnly={false}
+          searchMode={false}
+          searchQuery=""
+          nowMilliseconds={Date.parse("2024-01-15T12:00:00Z")}
+          recovery={null}
+        />
+      ),
+      { width: 120, height: 24 },
+    );
+    renderers.push(setup.renderer);
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+
+    expect(frame).toContain("ID …56789abc");
+    expect(frame).not.toContain("Unavailable");
   });
 
   it("replaces selected details with exact recovery and no-resume text", async () => {
@@ -294,6 +337,6 @@ describe("AttentionDashboard", () => {
     );
     expect(frame).toContain("Directory: /workspace/api-workers");
     expect(frame).toContain("workbench attach WB-payments");
-    expect(frame).toContain("no resume performed");
+    expect(frame).toContain("No resume performed; attention retained.");
   });
 });

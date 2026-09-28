@@ -54,8 +54,9 @@ export function attentionRuntimeSessionLabel(session: EnrichedSession): string {
   if (session.summary) return session.summary;
   const runtimeSessionId =
     session.codexAttention?.identity.runtimeSessionId ??
-    session.nativeSessionId;
-  return runtimeSessionId ? `ID …${runtimeSessionId.slice(-8)}` : "Unavailable";
+    session.nativeSessionId ??
+    session.id;
+  return `ID …${runtimeSessionId.slice(-8)}`;
 }
 
 export function attentionContextRemainingPercent(

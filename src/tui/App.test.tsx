@@ -365,14 +365,16 @@ describe("App", () => {
       null,
     );
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).toContain("All tracked (2)");
+    expect(setup.captureCharFrame()).toContain("1 pending · 2 sessions");
+    expect(setup.captureCharFrame()).toContain("f Pending");
 
     setup.mockInput.pressKey("f");
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
-    expect(frame).toContain("Attention only (1)");
+    expect(frame).toContain("1 pending · 2 sessions");
+    expect(frame).toContain("f All");
     expect(frame).toContain("pending");
-    expect(frame).not.toContain("Selected: clear");
+    expect(frame).not.toContain("clear");
   });
 
   it("retains a Workbench row and shows recovery when Enter cannot verify it", async () => {
@@ -405,7 +407,7 @@ describe("App", () => {
       expect(switchToWorkbenchPaneSpy).not.toHaveBeenCalled();
       expect(frame).toContain("Pane verification failed");
       expect(frame).toContain("workbench attach WB-payments");
-      expect(frame).toContain("no resume performed");
+      expect(frame).toContain("No resume performed; attention retained.");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -587,9 +589,7 @@ describe("App", () => {
         ["agent-attention", "clear-row", "host", "runtime-pending"],
       ]);
       expect(setup.captureCharFrame()).toContain("Attention dismissed");
-      expect(setup.captureCharFrame()).toContain(
-        "0 attention items / 0 sessions",
-      );
+      expect(setup.captureCharFrame()).toContain("0 pending · 1 session");
     } finally {
       Bun.spawn = originalSpawn;
     }
@@ -633,9 +633,7 @@ describe("App", () => {
       expect(seenRequests).toHaveLength(1);
       expect(seenRequests[0]).toContain("/sessions/claude-waiting/seen");
       expect(setup.captureCharFrame()).toContain("Attention dismissed");
-      expect(setup.captureCharFrame()).toContain(
-        "0 attention items / 0 sessions",
-      );
+      expect(setup.captureCharFrame()).toContain("0 pending · 1 session");
     } finally {
       globalThis.fetch = originalFetch;
     }
