@@ -124,6 +124,11 @@ export class LogWatcher {
   /** Last unbound-rebind attempt per session (cooldown bookkeeping). */
   private rebindAttemptAt: Map<string, number> = new Map();
   /**
+   * `FullDerivation.cappedWorkingState` per session, held until the log
+   * appends again or the reconciler settles it against the pane.
+   */
+  private cappedWorkingStates: Map<string, SessionState> = new Map();
+  /**
    * Timer for the NEXT stat-poll pass, non-null only while an adapter with
    * `pollsLog` runs and no pass is currently in flight (the loop
    * self-schedules, so the two states are exclusive).
@@ -168,6 +173,16 @@ export class LogWatcher {
   isRecentlyProcessed(sessionId: string, thresholdMs = 1000): boolean {
     const lastTime = this.lastProcessedAt.get(sessionId);
     return lastTime !== undefined && Date.now() - lastTime < thresholdMs;
+  }
+
+  /** The `working` state the adapter capped to idle on this session's full
+   * derive, while no later log entry has superseded it. */
+  getCappedWorkingState(sessionId: string): SessionState | undefined {
+    return this.cappedWorkingStates.get(sessionId);
+  }
+
+  clearCappedWorkingState(sessionId: string): void {
+    this.cappedWorkingStates.delete(sessionId);
   }
 
   private rememberDiscoveredLogPath(
@@ -253,6 +268,7 @@ export class LogWatcher {
     if (!session) return;
     if (session.logPath) this.unwatchFile(session.logPath);
     this.lastProcessedAt.delete(marker.session_id);
+    this.cappedWorkingStates.delete(marker.session_id);
     this.adapter.onSessionRemoved?.(marker.session_id);
     this.sessionManager.removeSession(marker.session_id);
   }
@@ -412,6 +428,7 @@ export class LogWatcher {
     this.debounceTimers.clear();
     this.fileOffsets.clear();
     this.lastProcessedAt.clear();
+    this.cappedWorkingStates.clear();
     this.watchedFiles.clear();
     this.knownLogPaths.clear();
   }
@@ -915,12 +932,14 @@ export class LogWatcher {
       if (session) {
         this.knownLogPaths.delete(session.id);
         this.lastProcessedAt.delete(session.id);
+        this.cappedWorkingStates.delete(session.id);
       }
       return;
     }
 
     this.knownLogPaths.delete(nativeId);
     this.lastProcessedAt.delete(nativeId);
+    this.cappedWorkingStates.delete(nativeId);
     this.rebindAttemptAt.delete(nativeId);
     this.encodingDriftWarned.delete(nativeId);
     if (this.runtimeMode === "claude-no-hooks") return;
@@ -935,7 +954,7 @@ export class LogWatcher {
     const offset = this.fileOffsets.get(path) || 0;
 
     if (offset === 0) {
-      const { state, newOffset, failed } =
+      const { state, newOffset, failed, cappedWorkingState } =
         await this.adapter.deriveFullState(path);
       // A failed read is not a derivation: it must neither clobber the live
       // state nor record an offset (0 against a non-empty file re-arms this
@@ -943,6 +962,11 @@ export class LogWatcher {
       // makes the next pass retry the read.
       if (failed) return;
       this.sessionManager.updateSession(sessionId, state);
+      if (cappedWorkingState) {
+        this.cappedWorkingStates.set(sessionId, cappedWorkingState);
+      } else {
+        this.cappedWorkingStates.delete(sessionId);
+      }
       this.fileOffsets.set(path, newOffset);
       this.adapter.onSessionStateUpdated?.(sessionId, state);
       this.lastProcessedAt.set(sessionId, Date.now());
@@ -960,6 +984,7 @@ export class LogWatcher {
     } = await this.adapter.deriveIncrementalState(path, offset, currentState);
 
     this.fileOffsets.set(path, newOffset);
+    if (hasNewEntries) this.cappedWorkingStates.delete(sessionId);
 
     if (newState.status !== session.status || hasNewEntries) {
       this.sessionManager.updateSession(sessionId, newState);

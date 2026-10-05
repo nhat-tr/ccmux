@@ -118,6 +118,17 @@ export interface CodexAttentionMetadata {
 }
 
 /**
+ * How full a session's context window was at its latest API request, read
+ * from the token usage the agent's log records for that request.
+ */
+export interface ContextUsage {
+  model: string;
+  /** Prompt tokens of the latest request: uncached, cache-write, and cache-read. */
+  contextTokens: number;
+  contextWindowTokens: number;
+}
+
+/**
  * A linked artifact a background agent produced, from `state.json`
  * `children[]`. `kind: "pr"` is the only value observed so far; kept open.
  */
@@ -324,6 +335,9 @@ export interface Session {
   ambiguousWait?: boolean;
   /** Native Codex attention data imported from the private collector cache. */
   codexAttention?: CodexAttentionMetadata;
+  /** Context-window occupancy from the latest request in the agent's log.
+   * Absent until the log shows an assistant message with token usage. */
+  contextUsage?: ContextUsage;
 }
 
 /**
@@ -375,6 +389,8 @@ export interface SessionState {
    * replaces the session's prompts wholesale (the fold is a full re-derive,
    * not a merge). Mirrors the `lastPrompt` non-clear convention. */
   prompts?: string[];
+  /** Latest context-window occupancy. `undefined` means "leave alone". */
+  contextUsage?: ContextUsage;
   /** Background-only: row subtitle from `state.json` `detail`/`name`.
    * Non-null (undefined = "leave alone") to mirror `Session.backgroundDetail`
    * so `Partial<SessionState>` stays assignable to `Partial<Session>`. */

@@ -48,7 +48,11 @@ export interface ReconcilerDeps {
       state: "unread" | "read" | null,
     ): boolean;
   };
-  watcher: { isRecentlyProcessed(sessionId: string): boolean };
+  watcher: {
+    isRecentlyProcessed(sessionId: string): boolean;
+    getCappedWorkingState?(sessionId: string): SessionState | undefined;
+    clearCappedWorkingState?(sessionId: string): void;
+  };
   hookManager: {
     getMarkerForSession(session: Session): SessionPidMarker | null;
     getMarkersByAgentAndPid(agentType: string, pid: number): SessionPidMarker[];
@@ -608,11 +612,32 @@ async function resolveNativeClaudeStates(
     paneId: string;
     wasWorking: boolean;
   }> = [];
+  const cappedPaneSessions: Array<{
+    id: string;
+    paneId: string;
+    cappedWorkingState: SessionState;
+  }> = [];
 
   for (const session of deps.sessionManager.getSessions()) {
     if (session.agentType !== "claude") continue;
     if (session.trackingMode !== "native") continue;
-    if (session.status === "idle") continue;
+    if (session.status === "idle") {
+      const cappedWorkingState = deps.watcher.getCappedWorkingState?.(
+        session.id,
+      );
+      const canCheckPane =
+        session.tmuxPane !== null &&
+        session.pid != null &&
+        alivePids.has(session.pid);
+      if (cappedWorkingState && canCheckPane) {
+        cappedPaneSessions.push({
+          id: session.id,
+          paneId: session.tmuxPane,
+          cappedWorkingState,
+        });
+      }
+      continue;
+    }
     if (deps.watcher.isRecentlyProcessed(session.id)) continue;
 
     let isProcessAlive: boolean | null;
@@ -675,6 +700,8 @@ async function resolveNativeClaudeStates(
     });
   }
 
+  await restoreCappedWorkingSessions(deps, cappedPaneSessions, paneById);
+
   if (stalePaneSessions.length === 0) {
     return;
   }
@@ -716,6 +743,47 @@ async function resolveNativeClaudeStates(
         pendingTool: null,
       });
     }
+  }
+}
+
+/**
+ * Settle each session the Claude log adapter seeded as idle over a `working`
+ * log (see `FullDerivation.cappedWorkingState`) with one pane check: a pane
+ * that still shows work gets the log's `working` state back, anything else
+ * leaves the seed idle. Idle to working fires no notification.
+ *
+ * The log's own `lastActivityAt` is kept so the next tick's stale-pane check
+ * above keeps confirming the turn against the pane, as it does for a long
+ * tool call the daemon watched from the start.
+ */
+async function restoreCappedWorkingSessions(
+  deps: ReconcilerDeps,
+  sessions: Array<{
+    id: string;
+    paneId: string;
+    cappedWorkingState: SessionState;
+  }>,
+  paneById: Map<string, TmuxPane>,
+): Promise<void> {
+  const results = await Promise.all(
+    sessions.map(async (session) => ({
+      ...session,
+      detection: await detectPaneState(
+        session.paneId,
+        paneById.get(session.paneId),
+      ),
+    })),
+  );
+
+  for (const { id, cappedWorkingState, detection } of results) {
+    deps.watcher.clearCappedWorkingState?.(id);
+    if (detection.state !== "working") continue;
+    deps.sessionManager.updateSession(id, {
+      status: "working",
+      attentionType: null,
+      pendingTool: cappedWorkingState.pendingTool,
+      lastActivityAt: cappedWorkingState.lastActivityAt,
+    });
   }
 }
 

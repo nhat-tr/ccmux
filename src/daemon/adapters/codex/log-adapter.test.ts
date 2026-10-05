@@ -260,6 +260,23 @@ describe("CodexLogAdapter", () => {
       const { state } = await adapter.deriveFullState(logPath);
       expect(state.status).toBe("working");
     });
+
+    it("seeds an open task as working however long the rollout has been silent", async () => {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+      writeFileSync(
+        logPath,
+        jsonl(
+          sessionMeta(),
+          eventMsg(tenMinutesAgo, { type: "task_started", turn_id: "t1" }),
+        ),
+      );
+
+      const { state, cappedWorkingState } =
+        await adapter.deriveFullState(logPath);
+
+      expect(state.status).toBe("working");
+      expect(cappedWorkingState).toBeUndefined();
+    });
   });
 
   describe("deriveFullState - turn_aborted", () => {

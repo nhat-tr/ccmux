@@ -80,6 +80,22 @@ export interface AssistantMessage {
   role: "assistant";
   content: ContentBlock[];
   stop_reason?: string;
+  /** API model ID that produced the response, or `<synthetic>` for a
+   * message Claude Code wrote itself (no request was sent). */
+  model?: string;
+  usage?: AssistantUsage;
+}
+
+/**
+ * Token counts the API reported for the request behind an assistant message.
+ * Every input field is part of the same request's prompt: the uncached
+ * remainder, the prefix written to cache, and the prefix read from cache.
+ */
+export interface AssistantUsage {
+  input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  output_tokens?: number;
 }
 
 /**
@@ -160,4 +176,6 @@ export type LogEntry =
   | SummaryLogEntry
   | SystemLogEntry
   | QueueOperationLogEntry
-  | (BaseLogEntry & { type: string });
+  // Sidecar lines Claude Code appends after a turn (`last-prompt`,
+  // `ai-title`, `mode`, `permission-mode`, `atis-latch`) carry no timestamp.
+  | (Omit<BaseLogEntry, "timestamp"> & { type: string; timestamp?: string });

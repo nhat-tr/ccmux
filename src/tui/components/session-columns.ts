@@ -59,22 +59,34 @@ export function attentionRuntimeSessionLabel(session: EnrichedSession): string {
   return `ID …${runtimeSessionId.slice(-8)}`;
 }
 
+function percentOfWindowRemaining(
+  usedTokens: number,
+  windowTokens: number,
+): number {
+  const remainingTokens = Math.max(0, windowTokens - usedTokens);
+  return Math.round(Math.min(1, remainingTokens / windowTokens) * 100);
+}
+
 export function attentionContextRemainingPercent(
   session: EnrichedSession,
 ): number | null {
   const latestTokenUsage = session.codexAttention?.latestTokenUsage;
   const modelContextWindow = session.codexAttention?.modelContextWindow;
-  if (!latestTokenUsage || modelContextWindow === undefined) return null;
+  if (!latestTokenUsage || modelContextWindow === undefined) {
+    const contextUsage = session.contextUsage;
+    if (!contextUsage) return null;
+    return percentOfWindowRemaining(
+      contextUsage.contextTokens,
+      contextUsage.contextWindowTokens,
+    );
+  }
   if (modelContextWindow <= codexContextBaselineTokens) return 0;
   const effectiveWindow = modelContextWindow - codexContextBaselineTokens;
   const usedTokens = Math.max(
     0,
     latestTokenUsage.totalTokens - codexContextBaselineTokens,
   );
-  const remainingTokens = Math.max(0, effectiveWindow - usedTokens);
-  return Math.round(
-    Math.min(1, Math.max(0, remainingTokens / effectiveWindow)) * 100,
-  );
+  return percentOfWindowRemaining(usedTokens, effectiveWindow);
 }
 
 export function attentionContextRemainingLabel(
@@ -113,13 +125,15 @@ export function formatAttentionTokenCount(tokens: number): string {
 
 export function attentionContextUsageLabel(session: EnrichedSession): string {
   const attention = session.codexAttention;
-  if (
-    !attention?.latestTokenUsage ||
-    attention.modelContextWindow === undefined
-  ) {
+  const usedTokens =
+    attention?.latestTokenUsage?.totalTokens ??
+    session.contextUsage?.contextTokens;
+  const windowTokens =
+    attention?.modelContextWindow ?? session.contextUsage?.contextWindowTokens;
+  if (usedTokens === undefined || windowTokens === undefined) {
     return "unavailable";
   }
-  return `${attentionContextRemainingLabel(session)} · ${formatAttentionTokenCount(attention.latestTokenUsage.totalTokens)} / ${formatAttentionTokenCount(attention.modelContextWindow)}`;
+  return `${attentionContextRemainingLabel(session)} · ${formatAttentionTokenCount(usedTokens)} / ${formatAttentionTokenCount(windowTokens)}`;
 }
 
 export function attentionCumulativeUsageLabel(

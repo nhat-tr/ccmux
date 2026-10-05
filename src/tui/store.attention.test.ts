@@ -69,7 +69,7 @@ function attentionStore() {
 }
 
 describe("attention-mode store", () => {
-  it("orders the latest transcript activity first", () => {
+  it("orders sessions that need the user first, then the latest activity", () => {
     const store = attentionStore();
     store.actions.setSessions([
       attentionSession(
@@ -88,13 +88,55 @@ describe("attention-mode store", () => {
       attentionSession("older-error", [pendingItem("error", "error", 30_000)], {
         lastActivityAt: "2024-01-15T12:02:00Z",
       }),
+      attentionSession("oldest-clear", [], {
+        lastActivityAt: "2024-01-15T12:00:00Z",
+      }),
     ]);
 
     expect(store.sortedSessions().map((session) => session.id)).toEqual([
-      "latest-clear",
-      "recent-reply",
-      "older-error",
       "oldest-input",
+      "older-error",
+      "recent-reply",
+      "latest-clear",
+      "oldest-clear",
+    ]);
+  });
+
+  it("ranks Claude and Codex sessions that need the user above a more recent working session", () => {
+    const store = attentionStore();
+    store.actions.setSessions([
+      mockEnrichedSession({
+        id: "claude-working",
+        agentType: "claude",
+        status: "working",
+        lastActivityAt: "2024-01-15T12:05:00Z",
+      }),
+      mockEnrichedSession({
+        id: "claude-unread",
+        agentType: "claude",
+        status: "idle",
+        attentionState: "unread",
+        lastActivityAt: "2024-01-15T12:04:00Z",
+      }),
+      attentionSession(
+        "codex-reply",
+        [pendingItem("reply", "reply-ready", 20_000)],
+        { lastActivityAt: "2024-01-15T12:03:00Z" },
+      ),
+      mockEnrichedSession({
+        id: "claude-waiting",
+        agentType: "claude",
+        status: "waiting",
+        attentionType: "permission",
+        lastActivityAt: "2024-01-15T12:01:00Z",
+      }),
+    ]);
+
+    expect(store.sortedSessions().map((session) => session.id)).toEqual([
+      "claude-waiting",
+      "claude-unread",
+      "codex-reply",
+      "claude-working",
     ]);
   });
 

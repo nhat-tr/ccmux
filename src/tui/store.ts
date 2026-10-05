@@ -748,6 +748,7 @@ function attentionPriority(session: EnrichedSession): number {
   if (pendingItems.some((item) => item.reason === "error")) return 1;
   if (pendingItems.some((item) => item.reason === "reply-ready")) return 2;
   if (session.status === "waiting") return 0;
+  if (session.attentionState === "unread") return 2;
   return 3;
 }
 
@@ -1171,7 +1172,18 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
     () => {
       if (options.attentionMode) {
         const sessions = [...state.sessions];
+        // Sessions that need the user come first, most urgent first; within
+        // that group and among the rest, the latest activity leads.
         sessions.sort((left, right) => {
+          const attentionDifference =
+            Number(sessionHasAttention(right)) -
+            Number(sessionHasAttention(left));
+          if (attentionDifference !== 0) return attentionDifference;
+          if (sessionHasAttention(left)) {
+            const priorityDifference =
+              attentionPriority(left) - attentionPriority(right);
+            if (priorityDifference !== 0) return priorityDifference;
+          }
           const leftActivityTimeMilliseconds =
             attentionActivityTimeMilliseconds(left);
           const rightActivityTimeMilliseconds =
@@ -1181,9 +1193,6 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
             if (rightActivityTimeMilliseconds === null) return -1;
             return rightActivityTimeMilliseconds - leftActivityTimeMilliseconds;
           }
-          const priorityDifference =
-            attentionPriority(left) - attentionPriority(right);
-          if (priorityDifference !== 0) return priorityDifference;
           const waitDifference =
             longestAttentionWaitMilliseconds(right) -
             longestAttentionWaitMilliseconds(left);

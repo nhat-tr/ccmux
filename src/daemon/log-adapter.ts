@@ -50,6 +50,13 @@ export interface FullDerivation {
    * empty log leave it unset.
    */
   failed?: true;
+  /**
+   * The `working` state the adapter replaced with `idle` because the log had
+   * been silent past `PANE_IDLE_THRESHOLD_MS`. A silent log cannot tell a
+   * finished turn from one long tool call or thinking block, so the reconciler
+   * restores this state when the pane still shows work.
+   */
+  cappedWorkingState?: SessionState;
 }
 
 /**

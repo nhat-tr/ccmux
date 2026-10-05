@@ -6,6 +6,7 @@ import {
   resolveDeadProcessState,
   getEffectiveStatus,
   appendPrompt,
+  claudeContextWindowTokens,
 } from "./status-machine";
 import {
   MAX_SESSION_PROMPTS,
@@ -1092,6 +1093,24 @@ describe("status-machine", () => {
       expect(state.status).toBe("idle");
     });
 
+    it("keeps lastActivityAt when a sidecar entry has no timestamp", () => {
+      const assistant: AssistantLogEntry = {
+        type: "assistant",
+        uuid: "a1",
+        parentUuid: null,
+        timestamp: "2024-01-01T12:00:00Z",
+        message: { role: "assistant", content: [], stop_reason: "end_turn" },
+      };
+      const sidecar: LogEntry = {
+        type: "last-prompt",
+        uuid: "s1",
+        parentUuid: null,
+      };
+
+      const state = deriveStateFromEntries([assistant, sidecar]);
+      expect(state.lastActivityAt).toBe("2024-01-01T12:00:00Z");
+    });
+
     it("should preserve status for unknown system subtype", () => {
       const entry: SystemLogEntry = {
         type: "system",
@@ -1231,6 +1250,71 @@ describe("status-machine", () => {
         state = processEntry(entry, state);
       }).not.toThrow();
       expect(state.prompts).toEqual([]);
+    });
+  });
+
+  describe("context usage", () => {
+    function assistantWithUsage(
+      model: string,
+      usage: NonNullable<AssistantLogEntry["message"]["usage"]>,
+    ): AssistantLogEntry {
+      return {
+        type: "assistant",
+        uuid: "a1",
+        parentUuid: null,
+        timestamp: "2024-01-01T12:00:00Z",
+        message: { role: "assistant", content: [], model, usage },
+      };
+    }
+
+    it("sums uncached, cache-write, and cache-read input tokens", () => {
+      const state = processEntry(
+        assistantWithUsage("claude-opus-5-5", {
+          input_tokens: 2,
+          cache_creation_input_tokens: 938,
+          cache_read_input_tokens: 162_588,
+          output_tokens: 1_862,
+        }),
+        createInitialState(),
+      );
+
+      expect(state.contextUsage).toEqual({
+        model: "claude-opus-5-5",
+        contextTokens: 163_528,
+        contextWindowTokens: 1_000_000,
+      });
+    });
+
+    it("keeps the previous usage for a synthetic message", () => {
+      const previous = processEntry(
+        assistantWithUsage("claude-opus-5-5", { input_tokens: 5_000 }),
+        createInitialState(),
+      );
+      const state = processEntry(
+        assistantWithUsage("<synthetic>", { input_tokens: 0 }),
+        previous,
+      );
+
+      expect(state.contextUsage?.contextTokens).toBe(5_000);
+    });
+
+    it("looks up the context window from the model ID", () => {
+      expect(claudeContextWindowTokens("claude-opus-5-5", 1)).toBe(1_000_000);
+      expect(claudeContextWindowTokens("claude-sonnet-4-6", 1)).toBe(1_000_000);
+      expect(claudeContextWindowTokens("claude-opus-4-5-20251101", 1)).toBe(
+        200_000,
+      );
+      expect(claudeContextWindowTokens("claude-sonnet-4-20250514", 1)).toBe(
+        200_000,
+      );
+      expect(claudeContextWindowTokens("claude-haiku-4-5", 1)).toBe(200_000);
+      expect(claudeContextWindowTokens("opus", 1)).toBe(1_000_000);
+    });
+
+    it("uses the 1M window when the prompt exceeds 200K tokens", () => {
+      expect(claudeContextWindowTokens("claude-sonnet-4-5", 250_000)).toBe(
+        1_000_000,
+      );
     });
   });
 });

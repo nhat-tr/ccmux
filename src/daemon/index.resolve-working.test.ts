@@ -18,7 +18,11 @@ mock.module("../lib/config", () => ({
 import { Daemon } from "./index";
 import { SessionManager } from "./sessions";
 import { reconcileAll } from "./state-reconciler";
-import type { ProcessInfo, TmuxPane } from "../types/session";
+import type {
+  ProcessInfo,
+  SessionState,
+  TmuxPane,
+} from "../types/session";
 
 function fakePane(overrides: Partial<TmuxPane> = {}): TmuxPane {
   return {
@@ -189,5 +193,109 @@ describe("reconcileAll: native Claude state resolution", () => {
     const session = sessionManager.getSession(sessionId)!;
     expect(session.status).toBe("working");
     expect(session.attentionType).toBeNull();
+  });
+
+  describe("a session the log adapter seeded idle over a working log", () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+    const cappedWorkingState: SessionState = {
+      status: "working",
+      attentionType: null,
+      pendingTool: "Bash",
+      inPlanMode: false,
+      lastActivityAt: tenMinutesAgo,
+    };
+
+    function createCappedSession(manager: SessionManager): string {
+      const sessionId = "session-1";
+      manager.createSession(
+        sessionId,
+        "/Users/test/.claude/projects/-Users-test-proj/session-1.jsonl",
+        "claude",
+      );
+      manager.setTmuxPane(sessionId, "%1");
+      manager.setPid(sessionId, 12345);
+      manager.updateSession(sessionId, {
+        status: "idle",
+        attentionType: null,
+        pendingTool: null,
+        lastActivityAt: tenMinutesAgo,
+      });
+      return sessionId;
+    }
+
+    function makeCappedDeps(sessionManager: SessionManager) {
+      const cappedWorkingStates = new Map([["session-1", cappedWorkingState]]);
+      return {
+        cappedWorkingStates,
+        deps: {
+          ...makeDeps(sessionManager),
+          watcher: {
+            isRecentlyProcessed: () => false,
+            getCappedWorkingState: (id: string) => cappedWorkingStates.get(id),
+            clearCappedWorkingState: (id: string) => {
+              cappedWorkingStates.delete(id);
+            },
+          },
+        },
+      };
+    }
+
+    it("restores the working state when the pane shows work", async () => {
+      const daemon = new Daemon();
+      const sessionManager = (
+        daemon as unknown as { sessionManager: SessionManager }
+      ).sessionManager;
+      const sessionId = createCappedSession(sessionManager);
+      const { deps, cappedWorkingStates } = makeCappedDeps(sessionManager);
+
+      await reconcileAll(deps, {
+        processes: [fakeClaudeProcess(12345)],
+        panes: [fakePane({ paneTitle: "⠂ Claude Code" })],
+        processTree: { findShellDescendants: () => [] },
+      });
+
+      const session = sessionManager.getSession(sessionId)!;
+      expect(session.status).toBe("working");
+      expect(session.pendingTool).toBe("Bash");
+      expect(session.lastActivityAt).toBe(tenMinutesAgo);
+      expect(cappedWorkingStates.has(sessionId)).toBe(false);
+    });
+
+    it("stays idle when the pane shows no agent running", async () => {
+      const daemon = new Daemon();
+      const sessionManager = (
+        daemon as unknown as { sessionManager: SessionManager }
+      ).sessionManager;
+      const sessionId = createCappedSession(sessionManager);
+      const { deps, cappedWorkingStates } = makeCappedDeps(sessionManager);
+
+      await reconcileAll(deps, {
+        processes: [fakeClaudeProcess(12345)],
+        panes: [fakePane({ currentCommand: "zsh" })],
+        processTree: { findShellDescendants: () => [] },
+      });
+
+      expect(sessionManager.getSession(sessionId)!.status).toBe("idle");
+      expect(cappedWorkingStates.has(sessionId)).toBe(false);
+    });
+
+    it("keeps the capped state for a later tick when the session has no pane yet", async () => {
+      const daemon = new Daemon();
+      const sessionManager = (
+        daemon as unknown as { sessionManager: SessionManager }
+      ).sessionManager;
+      const sessionId = createCappedSession(sessionManager);
+      sessionManager.setTmuxPane(sessionId, null);
+      const { deps, cappedWorkingStates } = makeCappedDeps(sessionManager);
+
+      await reconcileAll(deps, {
+        processes: [fakeClaudeProcess(12345)],
+        panes: [],
+        processTree: { findShellDescendants: () => [] },
+      });
+
+      expect(sessionManager.getSession(sessionId)!.status).toBe("idle");
+      expect(cappedWorkingStates.has(sessionId)).toBe(true);
+    });
   });
 });

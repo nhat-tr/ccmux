@@ -12,6 +12,7 @@ import type {
   CodexAttentionSnapshot,
   CodexPendingItem,
   CodexRuntimeSessionSnapshot,
+  ContextUsage,
 } from "../types/session";
 import { decodeProjectPath, extractProjectInfo } from "./parser";
 import { appendPrompt } from "./status-machine";
@@ -103,6 +104,18 @@ function backgroundInFlightEqual(
   const bKinds = b?.kinds ?? [];
   if (aKinds.length !== bKinds.length) return false;
   return aKinds.every((kind, i) => kind === bKinds[i]);
+}
+
+function isSameContextUsage(
+  a: ContextUsage,
+  b: ContextUsage | undefined,
+): boolean {
+  return (
+    b !== undefined &&
+    a.model === b.model &&
+    a.contextTokens === b.contextTokens &&
+    a.contextWindowTokens === b.contextWindowTokens
+  );
 }
 
 /** Shallow element-wise equality for two string arrays. */
@@ -927,6 +940,14 @@ export class SessionManager extends EventEmitter {
 
     if (state.gitBranch && state.gitBranch !== session.gitBranch) {
       session.gitBranch = state.gitBranch;
+      changed = true;
+    }
+
+    if (
+      state.contextUsage &&
+      !isSameContextUsage(state.contextUsage, session.contextUsage)
+    ) {
+      session.contextUsage = state.contextUsage;
       changed = true;
     }
 

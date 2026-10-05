@@ -15,6 +15,7 @@ import type {
   Session,
   SessionStatus,
   AttentionType,
+  ContextUsage,
 } from "../types/session";
 import {
   MAX_SESSION_PROMPTS,
@@ -22,6 +23,58 @@ import {
   MAX_PROMPTS_TOTAL_BYTES,
 } from "../lib/config";
 import { deriveProject } from "./project-derivation";
+
+const STANDARD_CONTEXT_WINDOW_TOKENS = 200_000;
+const LONG_CONTEXT_WINDOW_TOKENS = 1_000_000;
+
+/**
+ * The context window of a Claude model, from its ID. Every non-Haiku model
+ * from generation 4.6 on serves 1M tokens; Haiku and earlier generations
+ * serve 200K. A prompt already larger than the looked-up window proves the
+ * session runs with the 1M window (the long-context beta on an older model).
+ */
+export function claudeContextWindowTokens(
+  model: string,
+  contextTokens: number,
+): number {
+  if (contextTokens > STANDARD_CONTEXT_WINDOW_TOKENS) {
+    return LONG_CONTEXT_WINDOW_TOKENS;
+  }
+  if (model.includes("haiku")) return STANDARD_CONTEXT_WINDOW_TOKENS;
+  const generation = /^claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?:-|$)/u.exec(model);
+  if (!generation) {
+    // Claude Code's bare aliases ("opus", "sonnet") name the current models.
+    return /^[a-z]+$/u.test(model)
+      ? LONG_CONTEXT_WINDOW_TOKENS
+      : STANDARD_CONTEXT_WINDOW_TOKENS;
+  }
+  const major = Number(generation[1]);
+  const minor = Number(generation[2] ?? 0);
+  const servesLongContext = major > 4 || (major === 4 && minor >= 6);
+  return servesLongContext
+    ? LONG_CONTEXT_WINDOW_TOKENS
+    : STANDARD_CONTEXT_WINDOW_TOKENS;
+}
+
+/**
+ * Context usage of the request behind an assistant entry, or `undefined`
+ * when the entry records none: no usage block, or a `<synthetic>` message
+ * Claude Code wrote without calling the API.
+ */
+function contextUsageOf(entry: AssistantLogEntry): ContextUsage | undefined {
+  const { model, usage } = entry.message;
+  if (!model || model === "<synthetic>" || !usage) return undefined;
+  const contextTokens =
+    (usage.input_tokens ?? 0) +
+    (usage.cache_creation_input_tokens ?? 0) +
+    (usage.cache_read_input_tokens ?? 0);
+  if (contextTokens === 0) return undefined;
+  return {
+    model,
+    contextTokens,
+    contextWindowTokens: claudeContextWindowTokens(model, contextTokens),
+  };
+}
 
 /**
  * Append a user prompt to the capped prompt index. Trims and truncates the
@@ -115,7 +168,10 @@ export function processEntry(
         currentState,
       );
     default:
-      return { ...currentState, lastActivityAt: entry.timestamp };
+      return {
+        ...currentState,
+        lastActivityAt: entry.timestamp ?? currentState.lastActivityAt,
+      };
   }
 }
 
@@ -199,6 +255,7 @@ function processAssistantEntry(
     lastActivityAt: entry.timestamp,
     version: entry.version || currentState.version,
     gitBranch: entry.gitBranch || currentState.gitBranch,
+    contextUsage: contextUsageOf(entry) ?? currentState.contextUsage,
   };
 
   const toolUses = content.filter(

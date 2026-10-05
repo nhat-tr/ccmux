@@ -210,6 +210,27 @@ describe("attention session columns", () => {
     ).toBe("2h");
   });
 
+  it("formats Claude context usage from the transcript", () => {
+    const session = mockEnrichedSession({
+      agentType: "claude",
+      contextUsage: {
+        model: "claude-opus-5-5",
+        contextTokens: 250_000,
+        contextWindowTokens: 1_000_000,
+      },
+    });
+
+    expect(attentionContextRemainingLabel(session)).toBe("75% left");
+    expect(attentionContextUsageLabel(session)).toBe("75% left · 250k / 1m");
+  });
+
+  it("reports context unavailable when Claude has no usage yet", () => {
+    const session = mockEnrichedSession({ agentType: "claude" });
+
+    expect(attentionContextRemainingLabel(session)).toBe("—");
+    expect(attentionContextUsageLabel(session)).toBe("unavailable");
+  });
+
   it("uses tracked transcript activity before collector update time", () => {
     const session = mockEnrichedSession({
       lastActivityAt: "2024-01-15T11:43:00Z",

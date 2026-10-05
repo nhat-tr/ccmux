@@ -57,9 +57,10 @@ export function readSubagentWorktreePath(
 }
 
 /**
- * When a Claude log's last activity is older than the idle threshold, a
- * `working` status cannot be genuine — the session just went silent.
- * Cap it to idle to prevent phantom working→idle flaps on daemon restart.
+ * Seed a `working` state whose log has been silent past the idle threshold as
+ * idle, so a daemon restart does not replay a finished turn as working and
+ * then flap it to idle. A turn inside one long tool call or thinking block is
+ * silent too; `resolveNativeClaudeStates` restores those from the pane.
  */
 function capStaleWorking(state: SessionState): SessionState {
   if (state.status !== "working" || !state.lastActivityAt) return state;
@@ -162,7 +163,8 @@ export class ClaudeLogAdapter implements LogAdapter {
   async deriveFullState(path: string): Promise<FullDerivation> {
     const { state: seeded, newOffset } = await this.seedStateFromTail(path);
     const state = capStaleWorking(seeded);
-    return { state, newOffset };
+    if (state === seeded) return { state, newOffset };
+    return { state, newOffset, cappedWorkingState: seeded };
   }
 
   async deriveIncrementalState(
@@ -178,19 +180,19 @@ export class ClaudeLogAdapter implements LogAdapter {
 
   /**
    * Read the tail of a file, derive initial state from the entries, and
-   * backfill `lastActivityAt` from the last entry when the status machine
-   * didn't produce one. Shared by full state derivation and subagent
-   * seeding.
+   * backfill `lastActivityAt` from the last timestamped entry when the
+   * status machine didn't produce one. Shared by full state derivation and
+   * subagent seeding.
    */
   private async seedStateFromTail(path: string): Promise<FullDerivation> {
     const entries = await readLogTail(path, MAX_LOG_ENTRIES);
     let state = deriveStateFromEntries(entries);
 
-    if (entries.length > 0 && !state.lastActivityAt) {
-      state = {
-        ...state,
-        lastActivityAt: entries[entries.length - 1].timestamp,
-      };
+    const lastTimestamp = entries.findLast(
+      (entry) => entry.timestamp,
+    )?.timestamp;
+    if (lastTimestamp && !state.lastActivityAt) {
+      state = { ...state, lastActivityAt: lastTimestamp };
     }
 
     let newOffset = 0;

@@ -386,7 +386,7 @@ function selectedSessionMetadata(session: EnrichedSession): string | null {
   if (contextUsage !== "unavailable") details.push(`Context ${contextUsage}`);
   const cumulativeUsage = attentionCumulativeUsageLabel(session);
   if (cumulativeUsage !== "unavailable") details.push(cumulativeUsage);
-  const model = session.codexAttention?.model;
+  const model = session.codexAttention?.model ?? session.contextUsage?.model;
   if (model) details.push(model);
   return details.length > 0 ? details.join(" · ") : null;
 }

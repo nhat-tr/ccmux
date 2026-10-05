@@ -506,3 +506,59 @@ describe("ClaudeLogAdapter subagent head reads", () => {
     expect(headReads).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("ClaudeLogAdapter full derivation", () => {
+  let projectsDir: string;
+  let logPath: string;
+  let adapter: ClaudeLogAdapter;
+
+  /** A parent transcript whose last entry is a Bash call still running. */
+  function runningBashLog(timestamp: string): string {
+    return `${JSON.stringify({
+      type: "assistant",
+      uuid: "a1",
+      parentUuid: null,
+      timestamp,
+      message: {
+        role: "assistant",
+        stop_reason: "tool_use",
+        content: [{ type: "tool_use", id: "tool-1", name: "Bash", input: {} }],
+      },
+    })}\n`;
+  }
+
+  beforeEach(() => {
+    projectsDir = mkdtempSync(join(tmpdir(), "ccmux-full-derive-test-"));
+    const projectDir = join(projectsDir, ENCODED_PROJECT);
+    mkdirSync(projectDir, { recursive: true });
+    logPath = join(projectDir, `${SESSION_ID}.jsonl`);
+    adapter = new ClaudeLogAdapter(new SessionManager(), projectsDir);
+  });
+
+  afterEach(async () => {
+    await adapter.stop();
+    rmSync(projectsDir, { recursive: true, force: true });
+  });
+
+  it("seeds a silent working log as idle and returns the capped working state", async () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+    writeFileSync(logPath, runningBashLog(tenMinutesAgo));
+
+    const { state, cappedWorkingState } = await adapter.deriveFullState(logPath);
+
+    expect(state.status).toBe("idle");
+    expect(state.pendingTool).toBeNull();
+    expect(cappedWorkingState?.status).toBe("working");
+    expect(cappedWorkingState?.pendingTool).toBe("Bash");
+    expect(cappedWorkingState?.lastActivityAt).toBe(tenMinutesAgo);
+  });
+
+  it("returns no capped working state when the log wrote recently", async () => {
+    writeFileSync(logPath, runningBashLog(new Date().toISOString()));
+
+    const { state, cappedWorkingState } = await adapter.deriveFullState(logPath);
+
+    expect(state.status).toBe("working");
+    expect(cappedWorkingState).toBeUndefined();
+  });
+});

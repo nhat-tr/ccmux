@@ -1334,6 +1334,15 @@ export class Daemon {
       watcher: {
         isRecentlyProcessed: (id) =>
           isRecentlyProcessedByAny(this.claudeWatchers(), id),
+        getCappedWorkingState: (id) =>
+          this.claudeWatchers()
+            .map((watcher) => watcher.getCappedWorkingState(id))
+            .find((state) => state !== undefined),
+        clearCappedWorkingState: (id) => {
+          for (const watcher of this.claudeWatchers()) {
+            watcher.clearCappedWorkingState(id);
+          }
+        },
       },
       hookManager: this.hookManager,
       attentionTracker: this.attentionTracker,
