@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { testRender } from "@opentui/solid";
 import type { CodexAttentionMetadata, CodexPendingItem } from "../../types";
-import { AttentionDashboard } from "./AttentionDashboard";
+import {
+  AttentionDashboard,
+  attentionRowIndexForKey,
+} from "./AttentionDashboard";
 import { mockEnrichedSession } from "./test-helpers";
 
 const renderers: Array<{ destroy(): void }> = [];
@@ -199,7 +202,57 @@ describe("AttentionDashboard", () => {
     expect(header!.indexOf("RUNTIME SESSION")).toBeGreaterThan(
       header!.indexOf("PROJECT"),
     );
-    expect(header!.trimEnd().length).toBeLessThanOrEqual(145);
+    expect(header!.trimEnd().length).toBeLessThanOrEqual(147);
+  });
+
+  it("numbers the first nine rows and marks pinned rows", async () => {
+    const sessions = Array.from({ length: 10 }, (_, index) =>
+      mockEnrichedSession({
+        id: `session-${index + 1}`,
+        agentType: "claude",
+        project: "ccmux",
+        summary: `Task ${String(index + 1).padStart(2, "0")}`,
+        codexAttention: undefined,
+      }),
+    );
+    const setup = await testRender(
+      () => (
+        <AttentionDashboard
+          sessions={sessions}
+          selectedIndex={0}
+          pendingOnly={false}
+          searchMode={false}
+          searchQuery=""
+          nowMilliseconds={Date.parse("2024-01-15T12:00:00Z")}
+          recovery={null}
+          pinnedSessionIds={["session-1"]}
+        />
+      ),
+      { width: 120, height: 30 },
+    );
+    renderers.push(setup.renderer);
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    const header = lines.find((line) => line.includes("RUNTIME SESSION"));
+    const rowLine = (summary: string) =>
+      lines.find((line) => line.includes(summary));
+
+    expect(rowLine("Task 01")).toStartWith(" >1* Task 01");
+    expect(rowLine("Task 02")).toStartWith("  2  Task 02");
+    expect(rowLine("Task 09")).toStartWith("  9  Task 09");
+    expect(rowLine("Task 10")).toStartWith("     Task 10");
+    expect(rowLine("Task 01")!.indexOf("Task 01")).toBe(
+      header!.indexOf("RUNTIME SESSION"),
+    );
+    expect(setup.captureCharFrame()).toContain("Enter/1-9 Open  p Pin");
+  });
+
+  it("maps the number keys 1 to 9 to row indexes and ignores other keys", () => {
+    expect(attentionRowIndexForKey("1")).toBe(0);
+    expect(attentionRowIndexForKey("9")).toBe(8);
+    expect(attentionRowIndexForKey("0")).toBeNull();
+    expect(attentionRowIndexForKey("j")).toBeNull();
+    expect(attentionRowIndexForKey("f1")).toBeNull();
   });
 
   it("keeps required details and actions reachable in the compact layout", async () => {
@@ -224,7 +277,7 @@ describe("AttentionDashboard", () => {
     expect(frame).toContain("SESSION / ACTION / CONTEXT / ACTIVE");
     expect(frame).toContain("1–1 / 1");
     expect(frame).not.toContain("Runtime Session ID");
-    expect(frame).toContain("Enter Open");
+    expect(frame).toContain("Enter/1-9 Open");
     expect(frame).toContain("Esc Close");
   });
 

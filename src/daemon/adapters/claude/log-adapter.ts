@@ -99,6 +99,41 @@ function capStaleSubagentSeed(state: SessionState): SessionState {
   };
 }
 
+/**
+ * A subagent transcript path, capturing the parent session id and the agent
+ * id. Workflow agents write one level deeper than Task subagents and
+ * teammates, under `subagents/workflows/<run id>/`.
+ */
+const SUBAGENT_TRANSCRIPT_PATTERN =
+  /\/([0-9a-f-]{36})\/subagents\/(?:workflows\/[^/]+\/)?agent-([^/]+)\.jsonl$/;
+
+/** The subagents dir itself, plus one dir per workflow run beneath it. */
+function subagentTranscriptDirs(subagentDir: string): string[] {
+  const workflowsDir = join(subagentDir, "workflows");
+  try {
+    const workflowRunDirs = readdirSync(workflowsDir).map((name) =>
+      join(workflowsDir, name),
+    );
+    return [subagentDir, ...workflowRunDirs];
+  } catch {
+    // No workflow has run in this session.
+    return [subagentDir];
+  }
+}
+
+function hasRecentSubagentTranscript(dir: string, now: number): boolean {
+  try {
+    for (const name of readdirSync(dir)) {
+      if (!name.startsWith("agent-") || !name.endsWith(".jsonl")) continue;
+      const { mtimeMs } = statSync(join(dir, name));
+      if (now - mtimeMs <= SUBAGENT_STALE_TIMEOUT_MS) return true;
+    }
+  } catch {
+    // Missing dir or race with file removal → treat as inactive.
+  }
+  return false;
+}
+
 /** How long a subagents-dir activity probe result stays cached. Parent log
  * parses can arrive many times per second while the lead streams; the probe
  * (readdir + per-file stat) must not run on every one of them. */
@@ -110,8 +145,9 @@ const DIR_ACTIVITY_CACHE_TTL_MS = 15_000;
  * Wraps the existing Claude-specific parser and status machine, and owns
  * a private chokidar instance for subagent log files. The main `LogWatcher`
  * watches Claude session files at `PROJECTS_DIR/<encoded>/*.jsonl` (depth:1);
- * this adapter watches the deeper `<session>/subagents/agent-*.jsonl` layer
- * that holds per-subagent log output.
+ * this adapter watches the deeper `<session>/subagents/` layer that holds
+ * per-subagent log output: `agent-*.jsonl` directly inside it, and
+ * `workflows/<run id>/agent-*.jsonl` for the agents a workflow runs.
  *
  * Subagents come in two flavors with different lifecycles:
  * - Blocking `Task` tools: the parent log tracks pending task IDs
@@ -294,20 +330,9 @@ export class ClaudeLogAdapter implements LogAdapter {
       return cached.active;
     }
 
-    let active = false;
-    try {
-      for (const name of readdirSync(subagentDir)) {
-        if (!name.startsWith("agent-") || !name.endsWith(".jsonl")) continue;
-        const { mtimeMs } = statSync(join(subagentDir, name));
-        if (now - mtimeMs <= SUBAGENT_STALE_TIMEOUT_MS) {
-          active = true;
-          break;
-        }
-      }
-    } catch {
-      // Missing dir or race with file removal → treat as inactive.
-      active = false;
-    }
+    const active = subagentTranscriptDirs(subagentDir).some((dir) =>
+      hasRecentSubagentTranscript(dir, now),
+    );
 
     this.dirActivityCache.set(subagentDir, { checkedAt: now, active });
     return active;
@@ -352,9 +377,7 @@ export class ClaudeLogAdapter implements LogAdapter {
     // (`agent-a3a022...jsonl`) and name-prefixed for named agents/teammates
     // (`agent-areviewer-functionality-962e7b...jsonl`), so accept anything
     // between `agent-` and `.jsonl`.
-    const match = path.match(
-      /\/([0-9a-f-]{36})\/subagents\/agent-([^/]+)\.jsonl$/,
-    );
+    const match = path.match(SUBAGENT_TRANSCRIPT_PATTERN);
     return match ? { sessionId: match[1], agentId: match[2] } : null;
   }
 
@@ -369,15 +392,13 @@ export class ClaudeLogAdapter implements LogAdapter {
     });
 
     watcher.on("add", (path) => {
-      if (!path.endsWith(".jsonl")) return;
-      if (!path.includes("/subagents/agent-")) return;
+      if (!SUBAGENT_TRANSCRIPT_PATTERN.test(path)) return;
       this.subagentFileOffsets.set(path, 0);
       void this.handleSubagentChange(path);
     });
 
     watcher.on("change", (path) => {
-      if (!path.endsWith(".jsonl")) return;
-      if (!path.includes("/subagents/agent-")) return;
+      if (!SUBAGENT_TRANSCRIPT_PATTERN.test(path)) return;
       void this.handleSubagentChange(path);
     });
 

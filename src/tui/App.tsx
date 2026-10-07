@@ -116,6 +116,7 @@ import type { WorktreeSession } from "../daemon/worktree-prune";
 import { HelpOverlay } from "./components/HelpOverlay";
 import {
   AttentionDashboard,
+  attentionRowIndexForKey,
   type AttentionConversationPreview,
   type AttentionRecovery,
 } from "./components/AttentionDashboard";
@@ -169,6 +170,7 @@ interface AppProps {
    */
   forkableAgents?: string[];
   attention?: boolean;
+  attentionPinnedSessionIds?: string[];
 }
 
 /** Message text for a rejected fetch/parse, for a toast. */
@@ -307,6 +309,7 @@ export function App(props: AppProps) {
     sidebar: props.sidebar,
     lastSpawnAgent: props.lastSpawnAgent,
     attentionMode: props.attention,
+    attentionPinnedSessionIds: props.attentionPinnedSessionIds,
   });
   markStartup("store_created");
   const [attentionRecovery, setAttentionRecovery] =
@@ -3941,6 +3944,7 @@ export function App(props: AppProps) {
     }
 
     if (props.attention) {
+      const numberedRowIndex = attentionRowIndexForKey(key);
       if (key === "j" || key === "down") {
         setAttentionRecovery(null);
         store.actions.moveSelection(1);
@@ -3958,6 +3962,18 @@ export function App(props: AppProps) {
         store.actions.toggleAttentionPending();
       } else if (key === "c") {
         void dismissSelectedAttention();
+      } else if (key === "p") {
+        const session = store.selectedSession();
+        if (session) store.actions.toggleAttentionPin(session.id);
+      } else if (numberedRowIndex !== null) {
+        // The number key opens the row it labels. The row is selected first
+        // because the recovery panel a failed open produces only renders for
+        // the selected row.
+        const session = store.filteredSessions()[numberedRowIndex]?.session;
+        if (session) {
+          store.actions.setSelectedIndex(numberedRowIndex);
+          void activateAttentionSession(session);
+        }
       } else if (key === "q" || key === "escape") {
         process.exit(0);
       } else {
@@ -4379,6 +4395,7 @@ export function App(props: AppProps) {
             nowMilliseconds={Date.now() + store.tick() * 0}
             recovery={attentionRecovery()}
             conversationPreview={attentionConversationPreview()}
+            pinnedSessionIds={store.attentionPinnedSessionIds()}
           />
           <Show when={store.state.toastMessage}>
             <Toast message={store.state.toastMessage!} />

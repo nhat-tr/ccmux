@@ -125,6 +125,8 @@ The zsh `eval` has to come after `compinit`, since the script registers itself w
 > ```tmux
 > bind-key g run-shell -C 'display-popup -E -w 80% -h 75% "ccmux-attention --client-tty #{client_tty}"'
 > ```
+>
+> In the dashboard, `1` to `9` open the row with that number, and `p` pins the selected row to the top of the list, below any rows pinned before it; `p` on a pinned row unpins it. Pins are saved in `~/.config/ccmux/state.json`, so they survive closing the popup.
 
 ## 🎮 Usage
 

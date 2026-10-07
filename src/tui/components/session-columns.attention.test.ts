@@ -242,6 +242,42 @@ describe("attention session columns", () => {
     ).toBe("17m");
   });
 
+  it("reports a working session as last active now", () => {
+    const session = mockEnrichedSession({
+      agentType: "claude",
+      status: "working",
+      lastActivityAt: "2024-01-15T11:43:00Z",
+    });
+
+    expect(
+      attentionIdleLabel(session, Date.parse("2024-01-15T12:00:00Z")),
+    ).toBe("now");
+  });
+
+  it("reports an idle Claude session as working while one of its subagents works", () => {
+    const session = mockEnrichedSession({
+      agentType: "claude",
+      status: "idle",
+      lastActivityAt: "2024-01-15T11:43:00Z",
+      subagents: [
+        {
+          agentId: "a464391c46c868e60",
+          status: "working",
+          attentionType: null,
+          pendingTool: null,
+          lastActivityAt: "2024-01-15T11:59:00Z",
+          startedAt: "2024-01-15T11:43:00Z",
+          worktreePath: null,
+        },
+      ],
+    });
+
+    expect(attentionWorkStateLabel(session)).toBe("Working");
+    expect(
+      attentionIdleLabel(session, Date.parse("2024-01-15T12:00:00Z")),
+    ).toBe("now");
+  });
+
   it("reports available, unavailable, and unchecked source coverage", () => {
     const now = Date.parse("2024-01-15T12:00:00Z");
     expect(

@@ -23,6 +23,7 @@ import type {
 import { displayWidth, sliceToWidth, truncateText } from "../utils/format";
 import { stripTerminalNoise } from "../../lib/strip-ansi";
 import { HANDOFF_PREFIX } from "../../daemon/handoff";
+import { getEffectiveStatus } from "../../daemon/status-machine";
 
 const RESPONSIVE_KEYS = new Set([
   "default",
@@ -100,7 +101,7 @@ export function attentionIdleLabel(
   session: EnrichedSession,
   nowMilliseconds: number,
 ): string {
-  if (attentionWorkStateLabel(session) === "Working") return "—";
+  if (attentionWorkStateLabel(session) === "Working") return "now";
   const nativeUpdatedAt = session.codexAttention?.nativeUpdatedAt;
   const lastActivityAt =
     session.lastActivityAt ??
@@ -146,8 +147,9 @@ export function attentionCumulativeUsageLabel(
 
 export function attentionWorkStateLabel(session: EnrichedSession): string {
   const workState = session.codexAttention?.workState;
-  if (workState === "working" || session.status === "working") return "Working";
-  if (workState === "waiting" || session.status === "waiting") return "Waiting";
+  const { status } = getEffectiveStatus(session);
+  if (workState === "working" || status === "working") return "Working";
+  if (workState === "waiting" || status === "waiting") return "Waiting";
   if (workState === "not-working") return "Idle";
   return "Idle";
 }

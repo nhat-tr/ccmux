@@ -494,6 +494,57 @@ describe("App", () => {
     }
   });
 
+  it("opens the attention row a number key labels", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string" || input instanceof URL
+          ? input.toString()
+          : input.url;
+      const target = url.match(/\/sessions\/([^/]+)\/attention-target$/);
+      if (target) {
+        return Response.json({ kind: "host", paneId: `%pane-${target[1]}` });
+      }
+      return Response.json({ socketPath: null });
+    }) as typeof fetch;
+    const { restore } = withExitSpy();
+    try {
+      await renderApp(120, 30, { attention: true });
+      sseCallbacks!.onInit(
+        [attentionSession("alpha", "host"), attentionSession("beta", "host")],
+        null,
+      );
+      await setup.renderOnce();
+
+      setup.mockInput.pressKey("2");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(switchToPaneSpy).toHaveBeenCalledTimes(1);
+      expect(switchToPaneSpy).toHaveBeenCalledWith("%pane-beta");
+    } finally {
+      restore();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("pins the selected attention row to the top with p and saves the pin", async () => {
+    await renderApp(120, 30, { attention: true });
+    sseCallbacks!.onInit(
+      [attentionSession("alpha", "host"), attentionSession("beta", "host")],
+      null,
+    );
+    await setup.renderOnce();
+
+    setup.mockInput.pressKey("j");
+    setup.mockInput.pressKey("p");
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+
+    expect(lines.find((line) => line.includes("beta"))).toStartWith(" >1* beta");
+    expect(lines.find((line) => line.includes("alpha"))).toStartWith("  2  alpha");
+    expect(uiStateWrites).toContainEqual({ attentionPinnedSessionIds: ["beta"] });
+  });
+
   it("opens a pane-backed row that has no imported attention metadata", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: string | URL | Request) => {

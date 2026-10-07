@@ -42,6 +42,7 @@ interface TUIOptions {
   reviewHandback?: Preferences["reviewHandback"];
   forkableAgents?: string[];
   attention?: boolean;
+  attentionPinnedSessionIds?: string[];
 }
 
 /** Quiet-period after the last CAPABILITIES event before we restore focus.
@@ -157,6 +158,7 @@ export async function launchTUI(options: TUIOptions = {}): Promise<void> {
         reviewHandback={options.reviewHandback}
         forkableAgents={options.forkableAgents}
         attention={options.attention}
+        attentionPinnedSessionIds={options.attentionPinnedSessionIds}
       />
     ),
     renderer,

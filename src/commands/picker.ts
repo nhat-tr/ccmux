@@ -117,6 +117,7 @@ export function createPickerCommand(): Command {
           forkableAgents: forkableAgentNames(prefs),
           theme: prefs.theme,
           attention: options.attention,
+          attentionPinnedSessionIds: uiState.attentionPinnedSessionIds,
         });
       },
     );

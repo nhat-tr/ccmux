@@ -58,13 +58,16 @@ function attentionSession(
   });
 }
 
-function attentionStore() {
+function attentionStore(
+  options: Partial<Parameters<typeof createTUIStore>[0]> = {},
+) {
   return createTUIStore({
     attentionMode: true,
     groupBy: "none",
     searchPaneContent: false,
     searchTranscript: false,
     onPersistState: () => {},
+    ...options,
   });
 }
 
@@ -137,6 +140,110 @@ describe("attention-mode store", () => {
       "claude-unread",
       "codex-reply",
       "claude-working",
+    ]);
+  });
+
+  it("ranks working sessions above idle sessions with more recent activity", () => {
+    const store = attentionStore();
+    store.actions.setSessions([
+      mockEnrichedSession({
+        id: "idle-latest",
+        agentType: "claude",
+        project: "dev-autonomy",
+        status: "idle",
+        lastActivityAt: "2024-01-15T12:05:00Z",
+      }),
+      mockEnrichedSession({
+        id: "working-later-project",
+        agentType: "claude",
+        project: "vizquiry",
+        status: "working",
+        lastActivityAt: "2024-01-15T12:04:00Z",
+      }),
+      mockEnrichedSession({
+        id: "working-earlier-project",
+        agentType: "claude",
+        project: "CalCore",
+        status: "working",
+        lastActivityAt: "2024-01-15T12:01:00Z",
+      }),
+    ]);
+
+    expect(store.sortedSessions().map((session) => session.id)).toEqual([
+      "working-earlier-project",
+      "working-later-project",
+      "idle-latest",
+    ]);
+  });
+
+  it("places pinned sessions first in the order they were pinned", () => {
+    const store = attentionStore({
+      attentionPinnedSessionIds: ["idle-pinned-first", "idle-pinned-second"],
+    });
+    store.actions.setSessions([
+      attentionSession(
+        "needs-input",
+        [pendingItem("input", "input-required", 10_000, "user-input")],
+        { lastActivityAt: "2024-01-15T12:05:00Z" },
+      ),
+      mockEnrichedSession({
+        id: "working",
+        agentType: "claude",
+        status: "working",
+        lastActivityAt: "2024-01-15T12:04:00Z",
+      }),
+      attentionSession("idle-pinned-second", [], {
+        lastActivityAt: "2024-01-15T12:03:00Z",
+      }),
+      attentionSession("idle-pinned-first", [], {
+        lastActivityAt: "2024-01-15T12:00:00Z",
+      }),
+    ]);
+
+    expect(store.sortedSessions().map((session) => session.id)).toEqual([
+      "idle-pinned-first",
+      "idle-pinned-second",
+      "needs-input",
+      "working",
+    ]);
+  });
+
+  it("pins after existing pins, unpins in place, and saves each change", () => {
+    const writes: unknown[] = [];
+    const store = attentionStore({
+      attentionPinnedSessionIds: ["pinned"],
+      onPersistState: (updates) => {
+        writes.push(updates);
+      },
+    });
+    store.actions.setSessions([
+      attentionSession("latest", [], {
+        lastActivityAt: "2024-01-15T12:05:00Z",
+      }),
+      attentionSession("oldest", [], {
+        lastActivityAt: "2024-01-15T12:00:00Z",
+      }),
+      attentionSession("pinned", [], {
+        lastActivityAt: "2024-01-15T12:01:00Z",
+      }),
+    ]);
+
+    store.actions.toggleAttentionPin("oldest");
+    expect(store.sortedSessions().map((session) => session.id)).toEqual([
+      "pinned",
+      "oldest",
+      "latest",
+    ]);
+
+    store.actions.toggleAttentionPin("pinned");
+    expect(store.sortedSessions().map((session) => session.id)).toEqual([
+      "oldest",
+      "latest",
+      "pinned",
+    ]);
+    expect(writes).toEqual([
+      { attentionPinnedSessionIds: ["pinned", "oldest"] },
+      { attentionPinnedSessionIds: ["oldest"] },
     ]);
   });
 

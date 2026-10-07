@@ -25,6 +25,9 @@ export interface UIState {
    *  because the one-shot picker exits as soon as it spawns, so the
    *  "last agent" default only survives on disk. */
   lastSpawnAgent?: string;
+  /** Session ids the attention dashboard keeps at the top of its list, in
+   *  the order they were pinned. The main picker does not read it. */
+  attentionPinnedSessionIds?: string[];
 }
 
 /**

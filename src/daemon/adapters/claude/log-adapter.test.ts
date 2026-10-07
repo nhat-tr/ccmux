@@ -202,6 +202,34 @@ describe("ClaudeLogAdapter subagent watching", () => {
     expect(manager.getSession(SESSION_ID)!.subagents[0].status).toBe("working");
   });
 
+  it("tracks a workflow agent under subagents/workflows/<run id>/ when no direct subagent is active", async () => {
+    const oldTime = new Date(Date.now() - 10 * 60_000);
+    const staleFile = join(subagentDir, "agent-afinished.jsonl");
+    writeFileSync(staleFile, workingLogContent(oldTime.toISOString()));
+    utimesSync(staleFile, oldTime, oldTime);
+    const workflowRunDir = join(subagentDir, "workflows", "wf_ee55b526-ef2");
+    mkdirSync(workflowRunDir, { recursive: true });
+    writeFileSync(
+      join(workflowRunDir, "journal.jsonl"),
+      `${JSON.stringify({ type: "started" })}\n`,
+    );
+    writeFileSync(
+      join(workflowRunDir, "agent-a464391c46c868e60.jsonl"),
+      workingLogContent(new Date().toISOString()),
+    );
+
+    adapter.onReconcileTick(manager.getSession(SESSION_ID)!);
+
+    expect(watchedDirs().has(subagentDir)).toBe(true);
+    const populated = await waitFor(
+      () => manager.getSession(SESSION_ID)!.subagents.length === 1,
+    );
+    expect(populated).toBe(true);
+    const sub = manager.getSession(SESSION_ID)!.subagents[0];
+    expect(sub.agentId).toBe("a464391c46c868e60");
+    expect(sub.status).toBe("working");
+  });
+
   it("does not attach when subagent files are older than the staleness threshold", () => {
     const file = join(subagentDir, "agent-aabc123.jsonl");
     writeFileSync(file, workingLogContent(new Date().toISOString()));

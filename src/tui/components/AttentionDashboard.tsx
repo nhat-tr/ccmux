@@ -43,6 +43,30 @@ interface AttentionDashboardProps {
   nowMilliseconds: number;
   recovery: AttentionRecovery | null;
   conversationPreview?: AttentionConversationPreview | null;
+  pinnedSessionIds?: string[];
+}
+
+/** Rows 1 to 9 open with their number key; the rows below have no number. */
+export const ATTENTION_NUMBERED_ROW_COUNT = 9;
+
+/** The selection mark, the row's number key, the pin mark, and a space. */
+const ROW_MARKER_WIDTH = 4;
+
+/** The row index a number key opens, or null for any other key. */
+export function attentionRowIndexForKey(key: string): number | null {
+  if (!/^[0-9]$/.test(key)) return null;
+  const rowNumber = Number.parseInt(key, 10);
+  return rowNumber >= 1 && rowNumber <= ATTENTION_NUMBERED_ROW_COUNT
+    ? rowNumber - 1
+    : null;
+}
+
+function rowNumberLabel(rowIndex: number): string {
+  return rowIndex < ATTENTION_NUMBERED_ROW_COUNT ? String(rowIndex + 1) : " ";
+}
+
+function rowMarker(rowIndex: number, selected: boolean, pinned: boolean): string {
+  return `${selected ? ">" : " "}${rowNumberLabel(rowIndex)}${pinned ? "*" : " "} `;
 }
 
 function padCell(value: string, width: number): string {
@@ -235,7 +259,6 @@ function wideColumnVisibility(
 }
 
 function wideColumnWidths(width: number, visibility: WideColumnVisibility) {
-  const markerWidth = 2;
   const gap = " ";
   const visibleColumnCount =
     4 +
@@ -243,7 +266,7 @@ function wideColumnWidths(width: number, visibility: WideColumnVisibility) {
     Number(visibility.agent) +
     Number(visibility.source);
   const gapWidth = gap.length * (visibleColumnCount - 1);
-  const contentWidth = Math.max(84, width - markerWidth - gapWidth);
+  const contentWidth = Math.max(84, width - ROW_MARKER_WIDTH - gapWidth);
   const agentWidth = 6;
   const contextWidth = 10;
   const idleWidth = 11;
@@ -285,7 +308,7 @@ function wideHeader(width: number, visibility: WideColumnVisibility): string {
     padCell("CONTEXT", widths.contextWidth),
     padCell("LAST ACTIVE", widths.idleWidth),
   );
-  return `  ${cells.join(widths.gap)}`;
+  return `${" ".repeat(ROW_MARKER_WIDTH)}${cells.join(widths.gap)}`;
 }
 
 interface WideAttentionCell {
@@ -370,7 +393,7 @@ function compactPendingDetail(
   const nextAction = attentionNextActionLabel(session);
   const action =
     nextAction === "—" ? attentionWorkStateLabel(session) : nextAction;
-  return `${action} · ${attentionContextRemainingLabel(session)} · ${attentionIdleLabel(session, nowMilliseconds)} active`;
+  return `${action} · ${attentionContextRemainingLabel(session)} · last active ${attentionIdleLabel(session, nowMilliseconds)}`;
 }
 
 function singleLinePreview(value: string | null | undefined): string {
@@ -394,11 +417,13 @@ function selectedSessionMetadata(session: EnrichedSession): string | null {
 function compactRowLines(
   session: EnrichedSession,
   width: number,
+  rowIndex: number,
   selected: boolean,
+  pinned: boolean,
   forceTwoLines: boolean,
   nowMilliseconds: number,
 ): Array<{ color: string; text: string }> {
-  const marker = selected ? "> " : "  ";
+  const marker = rowMarker(rowIndex, selected, pinned);
   const identity = `${marker}${session.project} / ${attentionRuntimeSessionLabel(session)}`;
   const detail = compactPendingDetail(session, nowMilliseconds);
   if (!forceTwoLines && displayWidth(`${identity}   ${detail}`) <= width) {
@@ -416,7 +441,7 @@ function compactRowLines(
     },
     {
       color: attentionNextActionColor(session),
-      text: truncateText(`  ${detail}`, width),
+      text: truncateText(`${" ".repeat(ROW_MARKER_WIDTH)}${detail}`, width),
     },
   ];
 }
@@ -427,6 +452,11 @@ export const AttentionDashboard: Component<AttentionDashboardProps> = (
   const dimensions = useSharedTerminalDimensions();
   const compact = () => dimensions().width < 100 || dimensions().height < 16;
   const selectedSession = () => props.sessions[props.selectedIndex] ?? null;
+  const pinnedSessionIds = createMemo(
+    () => new Set(props.pinnedSessionIds ?? []),
+  );
+  const isPinned = (session: EnrichedSession) =>
+    pinnedSessionIds().has(session.id);
   const trackedSessions = () => props.trackedSessions ?? props.sessions;
   const totalPending = () =>
     trackedSessions().reduce(
@@ -491,20 +521,25 @@ export const AttentionDashboard: Component<AttentionDashboardProps> = (
       return compactRowLines(
         recoverySelected,
         dimensions().width - 2,
+        props.selectedIndex,
         true,
+        isPinned(recoverySelected),
         true,
         props.nowMilliseconds,
       );
     }
-    return visibleWindow().rows.flatMap((session, rowIndex) =>
-      compactRowLines(
+    return visibleWindow().rows.flatMap((session, windowRowIndex) => {
+      const rowIndex = visibleWindow().start + windowRowIndex;
+      return compactRowLines(
         session,
         dimensions().width - 2,
-        visibleWindow().start + rowIndex === props.selectedIndex,
-        rowIndex < 2,
+        rowIndex,
+        rowIndex === props.selectedIndex,
+        isPinned(session),
+        windowRowIndex < 2,
         props.nowMilliseconds,
-      ),
-    );
+      );
+    });
   });
   const line = (value: string) =>
     truncateText(value, Math.max(1, dimensions().width - 2));
@@ -585,8 +620,18 @@ export const AttentionDashboard: Component<AttentionDashboardProps> = (
                     width="100%"
                     backgroundColor={selected() ? theme.surface : undefined}
                   >
-                    <text fg={theme.teal} width={2} flexShrink={0}>
-                      {selected() ? "> " : "  "}
+                    <text fg={theme.teal} width={1} flexShrink={0}>
+                      {selected() ? ">" : " "}
+                    </text>
+                    <text fg={theme.overlay} width={1} flexShrink={0}>
+                      {rowNumberLabel(index())}
+                    </text>
+                    <text
+                      fg={theme.yellow}
+                      width={ROW_MARKER_WIDTH - 2}
+                      flexShrink={0}
+                    >
+                      {isPinned(session) ? "* " : "  "}
                     </text>
                     <For each={cells()}>
                       {(cell, cellIndex) => (
@@ -706,8 +751,8 @@ export const AttentionDashboard: Component<AttentionDashboardProps> = (
             <text fg={theme.teal}>
               {line(
                 props.recovery
-                  ? `j/k Select  / Search  f ${props.pendingOnly ? "All" : "Pending"}  Esc Close`
-                  : `j/k Select  Enter Open  c Dismiss  / Search  f ${props.pendingOnly ? "All" : "Pending"}  Esc Close`,
+                  ? `j/k Select  1-9 Open  p Pin  / Search  f ${props.pendingOnly ? "All" : "Pending"}  Esc Close`
+                  : `j/k Select  Enter/1-9 Open  p Pin  c Dismiss  / Search  f ${props.pendingOnly ? "All" : "Pending"}  Esc Close`,
               )}
             </text>
           </box>
@@ -716,7 +761,7 @@ export const AttentionDashboard: Component<AttentionDashboardProps> = (
         <box height={1}>
           <text fg={theme.teal}>
             {line(
-              `/ Search · f ${props.pendingOnly ? "All" : "Pending"} · c Dismiss`,
+              `/ Search · f ${props.pendingOnly ? "All" : "Pending"} · p Pin · c Dismiss`,
             )}
           </text>
         </box>
@@ -724,8 +769,8 @@ export const AttentionDashboard: Component<AttentionDashboardProps> = (
           <text fg={theme.teal}>
             {line(
               props.recovery
-                ? "j/k Select · Esc Close"
-                : "j/k Select · Enter Open · Esc Close",
+                ? "j/k Select · 1-9 Open · Esc Close"
+                : "j/k Select · Enter/1-9 Open · Esc Close",
             )}
           </text>
         </box>

@@ -44,7 +44,10 @@ import type { UntrackedMode } from "../daemon/worktree-move-changes";
 // dialog settles differently from the one that gets created is worse than
 // showing no name at all.
 import { slugify } from "../daemon/worktree-create";
-import { normalizePrompt } from "./components/session-columns";
+import {
+  attentionWorkStateLabel,
+  normalizePrompt,
+} from "./components/session-columns";
 import { capturePane } from "./utils/tmux";
 import { isSameServerCached } from "./utils/server-guard";
 import { stripAnsi } from "../lib/strip-ansi";
@@ -676,6 +679,8 @@ interface TUIStoreOptions {
   sidebar?: boolean;
   /** Use pending-item priority, pending/all filtering, and cached metadata search. */
   attentionMode?: boolean;
+  /** Session ids pinned to the top of the attention list, restored from UIState. */
+  attentionPinnedSessionIds?: string[];
   /** Override state persistence (pass no-op in tests) */
   onPersistState?: (updates: Partial<UIState>) => void | Promise<void>;
   /** How long a finished invoke row lingers before removal. Defaults to
@@ -924,6 +929,8 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
   const [pinnedGroups, setPinnedGroups] = createSignal<string[]>(
     options.pinnedGroups ?? [],
   );
+  const [attentionPinnedSessionIds, setAttentionPinnedSessionIds] =
+    createSignal<string[]>(options.attentionPinnedSessionIds ?? []);
 
   // Debounced persistence for UI state (avoids disk writes on every keypress)
   const persistStateFn = options.onPersistState ?? setUIState;
@@ -1172,9 +1179,22 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
     () => {
       if (options.attentionMode) {
         const sessions = [...state.sessions];
-        // Sessions that need the user come first, most urgent first; within
-        // that group and among the rest, the latest activity leads.
+        const pinnedSessionIds = attentionPinnedSessionIds();
+        const pinRanks = new Map(
+          pinnedSessionIds.map((sessionId, index) => [sessionId, index]),
+        );
+        const pinRank = (session: EnrichedSession) =>
+          pinRanks.get(session.id) ?? pinnedSessionIds.length;
+        // Pinned sessions lead in the order they were pinned, so a pinned
+        // row keeps its number key while the rows below it re-sort.
+        // Sessions that need the user come next, most urgent first; within
+        // that group and among the rest, the latest activity leads. A working
+        // session is active now, so it leads its group, and working sessions
+        // tie on activity: their lastActivityAt moves with every log entry,
+        // and comparing it would reorder the rows between two keypresses.
         sessions.sort((left, right) => {
+          const pinDifference = pinRank(left) - pinRank(right);
+          if (pinDifference !== 0) return pinDifference;
           const attentionDifference =
             Number(sessionHasAttention(right)) -
             Number(sessionHasAttention(left));
@@ -1184,14 +1204,23 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
               attentionPriority(left) - attentionPriority(right);
             if (priorityDifference !== 0) return priorityDifference;
           }
-          const leftActivityTimeMilliseconds =
-            attentionActivityTimeMilliseconds(left);
-          const rightActivityTimeMilliseconds =
-            attentionActivityTimeMilliseconds(right);
-          if (leftActivityTimeMilliseconds !== rightActivityTimeMilliseconds) {
-            if (leftActivityTimeMilliseconds === null) return 1;
-            if (rightActivityTimeMilliseconds === null) return -1;
-            return rightActivityTimeMilliseconds - leftActivityTimeMilliseconds;
+          const leftIsWorking = attentionWorkStateLabel(left) === "Working";
+          const rightIsWorking = attentionWorkStateLabel(right) === "Working";
+          if (leftIsWorking !== rightIsWorking) return leftIsWorking ? -1 : 1;
+          if (!leftIsWorking) {
+            const leftActivityTimeMilliseconds =
+              attentionActivityTimeMilliseconds(left);
+            const rightActivityTimeMilliseconds =
+              attentionActivityTimeMilliseconds(right);
+            if (
+              leftActivityTimeMilliseconds !== rightActivityTimeMilliseconds
+            ) {
+              if (leftActivityTimeMilliseconds === null) return 1;
+              if (rightActivityTimeMilliseconds === null) return -1;
+              return (
+                rightActivityTimeMilliseconds - leftActivityTimeMilliseconds
+              );
+            }
           }
           const waitDifference =
             longestAttentionWaitMilliseconds(right) -
@@ -2554,6 +2583,25 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
       });
     },
 
+    /**
+     * Pin a session to the top of the attention list, after the sessions
+     * already pinned, or unpin it. Written at once rather than debounced:
+     * opening a row exits the dashboard, and a pin made just before that
+     * would die with a pending write.
+     */
+    toggleAttentionPin(sessionId: string) {
+      const pinnedSessionIds = attentionPinnedSessionIds();
+      const isPinned = pinnedSessionIds.includes(sessionId);
+      const next = isPinned
+        ? pinnedSessionIds.filter((pinnedId) => pinnedId !== sessionId)
+        : [...pinnedSessionIds, sessionId];
+      setAttentionPinnedSessionIds(next);
+      this.showToast(isPinned ? "Unpinned" : "Pinned");
+      flushUIState({ attentionPinnedSessionIds: next }).catch(() => {
+        this.showToast("Could not save pins; they last until the dashboard closes");
+      });
+    },
+
     cycleGroupBy() {
       const currentIdx = VALID_GROUP_BY.indexOf(state.groupBy);
       const nextIdx = (currentIdx + 1) % VALID_GROUP_BY.length;
@@ -2699,6 +2747,9 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
         }
         if (freshState.pinnedGroups !== undefined) {
           setPinnedGroups(freshState.pinnedGroups);
+        }
+        if (freshState.attentionPinnedSessionIds !== undefined) {
+          setAttentionPinnedSessionIds(freshState.attentionPinnedSessionIds);
         }
         if (freshState.lastSpawnAgent !== undefined) {
           setState("lastSpawnAgent", freshState.lastSpawnAgent);
@@ -2860,6 +2911,7 @@ export function createTUIStore(options: TUIStoreOptions = {}) {
     selectedGroupSessions,
     collapsedGroups,
     pinnedGroups,
+    attentionPinnedSessionIds,
     actions,
     tick,
     bumpTick: () => setTick((t) => t + 1),
