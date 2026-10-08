@@ -39,6 +39,42 @@ function file(path: string, content: string, mtimeSec: number): string {
 }
 
 describe("computeBuildIdentity", () => {
+  it("uses the daemon bundle identity for the built attention launcher", () => {
+    const daemonBundle = file(
+      join(dir, "dist", "index.js"),
+      "daemon",
+      1_700_000_000,
+    );
+    const attentionBundle = file(
+      join(dir, "dist", "attention-index.js"),
+      "attention",
+      1_700_000_100,
+    );
+    const daemonIdentity = computeBuildIdentity({
+      execPath: "bun",
+      argv1: daemonBundle,
+      version: "1.2.3",
+    });
+    const attentionIdentity = computeBuildIdentity({
+      execPath: "bun",
+      argv1: attentionBundle,
+      version: "1.2.3",
+    });
+    expect(attentionIdentity).toEqual(daemonIdentity);
+    expect(classifyDaemonBuild(daemonIdentity, attentionIdentity)).toBe(
+      "current",
+    );
+    file(daemonBundle, "rebuilt daemon", 1_700_000_200);
+    const rebuiltAttentionIdentity = computeBuildIdentity({
+      execPath: "bun",
+      argv1: attentionBundle,
+      version: "1.2.3",
+    });
+    expect(classifyDaemonBuild(daemonIdentity, rebuiltAttentionIdentity)).toBe(
+      "outdated",
+    );
+  });
+
   it("compiled binary: artifact is the binary's realpath, stamp its size:mtime", () => {
     const bin = file(join(dir, "bin", "ccmux"), "binary!", 1_700_000_000);
     const id = computeBuildIdentity({
@@ -197,6 +233,22 @@ describe("classifyDaemonBuild", () => {
 });
 
 describe("isTransientSourceRun", () => {
+  it("does not defer daemon replacement for the built attention launcher", () => {
+    file(join(dir, "dist", "index.js"), "daemon", 1_700_000_000);
+    const attentionBundle = file(
+      join(dir, "dist", "attention-index.js"),
+      "attention",
+      1_700_000_100,
+    );
+    expect(
+      isTransientSourceRun({
+        execPath: "bun",
+        argv1: attentionBundle,
+        version: "1.2.3",
+      }),
+    ).toBe(false);
+  });
+
   // `exists` is injected, so these paths need not be on disk.
   const bundleAt = (root: string) => (path: string) =>
     path === join(root, "dist", "index.js");

@@ -25,8 +25,9 @@
  *    worktrees on the same version each running the CLI would otherwise
  *    flip-flop the single shared daemon on every command. The user chooses a
  *    build explicitly with `ccmux daemon restart`.
- * 3. `stamp`: size and mtime of the file actually executed. Same artifact,
- *    different stamp -> `outdated` (a rebuild or reinstall in place).
+ * 3. `stamp`: size and mtime of the executed file, with the built attention
+ *    launcher using `dist/index.js` to identify the daemon it launches.
+ *    Same artifact, different stamp -> `outdated` (a rebuild or reinstall in place).
  *
  * A daemon that reports no identity at all (it predates this module) or a
  * malformed one is `outdated`: the issue's rule is that a missing identity is
@@ -55,7 +56,7 @@ export interface BuildIdentity {
   version: string;
   /** Compiled binary: its realpath. `bun <script>`: the checkout root. */
   artifact: string;
-  /** `${size}:${mtimeMs}` of the executed file; "" when it cannot be stat'ed. */
+  /** `${size}:${mtimeMs}` of the identity file; "" when it cannot be stat'ed. */
   stamp: string;
 }
 
@@ -100,10 +101,16 @@ export function computeBuildIdentity(
     return { version, artifact: binary, stamp: stampOf(binary) };
   }
   const script = realpathOr(resolve(cwd, argv1 ?? ""));
+  const artifact = dirname(dirname(script));
+  const daemonBundle = join(artifact, "dist", "index.js");
+  const identityScript =
+    script === join(artifact, "dist", "attention-index.js")
+      ? daemonBundle
+      : script;
   return {
     version,
-    artifact: dirname(dirname(script)),
-    stamp: stampOf(script),
+    artifact,
+    stamp: stampOf(identityScript),
   };
 }
 
@@ -152,11 +159,13 @@ export function isTransientSourceRun(
   // Same derivation as the identity's `artifact` for a `bun <script>` run.
   const artifact = dirname(dirname(script));
   const bundle = join(artifact, "dist", "index.js");
-  // Running the bundle itself is the settled state, not a transient one.
-  if (script === bundle) return false;
-  // No bundle at all (a fresh clone before its first build): there is nothing
-  // for a rebuild to land in, so no second run is coming and this one must
-  // not defer.
+  if (
+    script === bundle ||
+    script === join(artifact, "dist", "attention-index.js")
+  ) {
+    return false;
+  }
+  // Without a daemon bundle, deferring leaves no built launcher to update it.
   return exists(bundle);
 }
 

@@ -18,9 +18,9 @@ export type AttentionNavigationResult =
 
 /**
  * Verify that a dashboard row still names its live host pane. Imported Codex
- * rows use their attention identity; ordinary rows use their provider-native
- * Runtime Session identity. This function performs no switch and starts no
- * process.
+ * rows use their attention identity. Ordinary pane-tracked rows without a
+ * native identity require a matching live process in the pane. This function
+ * performs no switch and starts no process.
  */
 export function resolveAttentionNavigationTarget(
   session: Readonly<Session>,
@@ -28,6 +28,7 @@ export function resolveAttentionNavigationTarget(
   marker: Readonly<SessionPidMarker> | null,
   hasMatchingTranscriptIdentity: boolean,
   isProcessAlive: (pid: number) => boolean,
+  hasMatchingPaneProcess = false,
 ): AttentionNavigationResult {
   const attention = session.codexAttention;
   if (attention) {
@@ -49,14 +50,22 @@ export function resolveAttentionNavigationTarget(
 
   const runtimeSessionId =
     attention?.identity.runtimeSessionId ?? session.nativeSessionId;
+  if (!session.tmuxPane || !pane || pane.paneId !== session.tmuxPane) {
+    return { ok: false, reason: "pane-missing" };
+  }
+  if (!attention && !runtimeSessionId && session.trackingMode === "pane") {
+    if (session.pid === null || !isProcessAlive(session.pid)) {
+      return { ok: false, reason: "process-unavailable" };
+    }
+    return hasMatchingPaneProcess
+      ? { ok: true, paneId: pane.paneId }
+      : { ok: false, reason: "pane-identity-mismatch" };
+  }
   if (
     !runtimeSessionId ||
     (attention && session.nativeSessionId !== runtimeSessionId)
   ) {
     return { ok: false, reason: "native-identity-mismatch" };
-  }
-  if (!session.tmuxPane || !pane || pane.paneId !== session.tmuxPane) {
-    return { ok: false, reason: "pane-missing" };
   }
   if (marker) {
     if (

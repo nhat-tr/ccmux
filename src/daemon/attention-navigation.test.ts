@@ -67,6 +67,82 @@ const marker: SessionPidMarker = {
 };
 
 describe("attention navigation verification", () => {
+  function paneTrackedSession(): Session {
+    const ordinary = session();
+    ordinary.agentType = "claude";
+    ordinary.trackingMode = "pane";
+    delete ordinary.nativeSessionId;
+    delete ordinary.codexAttention;
+    return ordinary;
+  }
+
+  it("opens a pane-tracked row without a native identity when its live process belongs to the pane", () => {
+    expect(
+      resolveAttentionNavigationTarget(
+        paneTrackedSession(),
+        pane,
+        null,
+        false,
+        () => true,
+        true,
+      ),
+    ).toEqual({ ok: true, paneId: "%7" });
+  });
+
+  it("refuses a pane-tracked row when its process belongs to another pane", () => {
+    expect(
+      resolveAttentionNavigationTarget(
+        paneTrackedSession(),
+        pane,
+        null,
+        false,
+        () => true,
+        false,
+      ),
+    ).toEqual({ ok: false, reason: "pane-identity-mismatch" });
+  });
+
+  it("refuses a pane-tracked row when its process has exited", () => {
+    expect(
+      resolveAttentionNavigationTarget(
+        paneTrackedSession(),
+        pane,
+        null,
+        false,
+        () => false,
+        true,
+      ),
+    ).toEqual({ ok: false, reason: "process-unavailable" });
+  });
+
+  it("refuses a pane-tracked row when its saved pane is missing", () => {
+    expect(
+      resolveAttentionNavigationTarget(
+        paneTrackedSession(),
+        null,
+        null,
+        false,
+        () => true,
+        true,
+      ),
+    ).toEqual({ ok: false, reason: "pane-missing" });
+  });
+
+  it("requires native identity for an imported attention row even when a pane process matches", () => {
+    const imported = session();
+    delete imported.nativeSessionId;
+    expect(
+      resolveAttentionNavigationTarget(
+        imported,
+        pane,
+        marker,
+        false,
+        () => true,
+        true,
+      ),
+    ).toEqual({ ok: false, reason: "native-identity-mismatch" });
+  });
+
   it("returns the pane only when source, native identity, marker, and process agree", () => {
     expect(
       resolveAttentionNavigationTarget(

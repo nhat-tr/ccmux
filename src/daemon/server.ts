@@ -101,6 +101,8 @@ import { parseCodexAttentionSnapshot } from "./adapters/codex/attention-import";
 import { CodexLogAdapter } from "./adapters/codex/log-adapter";
 import { getSessionPidMarker } from "./session-markers";
 import { resolveAttentionNavigationTarget } from "./attention-navigation";
+import { findPaneHostingPid, listTmuxPanes } from "./pane-discovery";
+import { ProcessTree, shellCommKey } from "./process-tree";
 import {
   resolveWorkbenchAttentionNavigationTarget,
   type WorkbenchAttentionNavigationResult,
@@ -2357,7 +2359,7 @@ export class DaemonServer {
           );
     }
 
-    const pane = session.tmuxPane
+    let pane = session.tmuxPane
       ? (this.getPaneCache().get(session.tmuxPane) ?? null)
       : null;
     const runtimeSessionId =
@@ -2366,6 +2368,28 @@ export class DaemonServer {
     const marker = runtimeSessionId
       ? getSessionPidMarker(runtimeSessionId)
       : null;
+    let hasMatchingPaneProcess = false;
+    if (
+      !session.codexAttention &&
+      !runtimeSessionId &&
+      session.trackingMode === "pane" &&
+      session.pid !== null
+    ) {
+      const [panes, processTree] = await Promise.all([
+        listTmuxPanes(),
+        ProcessTree.build(),
+      ]);
+      pane =
+        panes.find((candidate) => candidate.paneId === session.tmuxPane) ?? null;
+      const agentProcess = processTree.getProcess(session.pid);
+      const agent = this.getAgentByType(session.agentType);
+      hasMatchingPaneProcess =
+        agentProcess !== undefined &&
+        agent !== undefined &&
+        agent.processMatch.test(shellCommKey(agentProcess.comm)) &&
+        findPaneHostingPid(session.pid, panes, processTree)?.paneId ===
+          session.tmuxPane;
+    }
     let hasMatchingTranscriptIdentity = false;
     if (
       marker === null &&
@@ -2398,6 +2422,7 @@ export class DaemonServer {
           return false;
         }
       },
+      hasMatchingPaneProcess,
     );
     return result.ok
       ? Response.json({ kind: "host", paneId: result.paneId }, { headers })
